@@ -145,13 +145,13 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
     //   sig_n2     ->setConstant(freeze);
     } else if(fit_version == 2) { // Double-sided Crystal Ball
 
-      RooRealVar* sig_mean     = new RooRealVar(Form("%s_sig_mean"  , name), "mean", signal_peak, signal_peak - 5., signal_peak + 5.);
-      RooRealVar* sig_sigma    = new RooRealVar(Form("%s_sig_sigma" , name), "sigma", 1., 0., 5.);
-      RooRealVar* sig_alpha1   = new RooRealVar(Form("%s_sig_alpha1", name), "alpha1", 1., 0.1, 10.);
-      RooRealVar* sig_alpha2   = new RooRealVar(Form("%s_sig_alpha2", name), "alpha2", 1., 0.1, 10.);
-      RooRealVar* sig_n1       = new RooRealVar(Form("%s_sig_n1"    , name), "enne1", 2., 0.1, 30.);
-      RooRealVar* sig_n2       = new RooRealVar(Form("%s_sig_n2"    , name), "enne2", 5., 0.1, 30.);
-      pdf       = new RooCrystalBall(Form("%s_sig_pdf"  , name), "Signal PDF", obs, *sig_mean, *sig_sigma, *sig_alpha1, *sig_n1, *sig_alpha2, *sig_n2);
+      RooRealVar* sig_mean     = new RooRealVar(Form("%s_mean"  , name), "mean", signal_peak, signal_peak - 5., signal_peak + 5.);
+      RooRealVar* sig_sigma    = new RooRealVar(Form("%s_sigma" , name), "sigma", 1., 0., 5.);
+      RooRealVar* sig_alpha1   = new RooRealVar(Form("%s_alpha1", name), "alpha1", 1., 0.1, 10.);
+      RooRealVar* sig_alpha2   = new RooRealVar(Form("%s_alpha2", name), "alpha2", 1., 0.1, 10.);
+      RooRealVar* sig_n1       = new RooRealVar(Form("%s_n1"    , name), "enne1", 2., 0.1, 30.);
+      RooRealVar* sig_n2       = new RooRealVar(Form("%s_n2"    , name), "enne2", 5., 0.1, 30.);
+      pdf       = new RooCrystalBall(Form("%s_pdf"  , name), "Signal PDF", obs, *sig_mean, *sig_sigma, *sig_alpha1, *sig_n1, *sig_alpha2, *sig_n2);
 
       sig_mean   ->setConstant(freeze);
       sig_sigma  ->setConstant(freeze);

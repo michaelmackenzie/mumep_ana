@@ -123,70 +123,87 @@ pdf_info get_dio_model(RooRealVar& obs, const TString process, const int selecti
 
   // Convolve the theory PDF with the resolution function
   const char* name = Form("%s_%i_dio", process.Data(), selection);
-  RooAbsPdf* resolution = nullptr;
-  const int resolution_version = 0;
 
-  if(resolution_version == 0) { // double-sided Crystal Ball
-    RooRealVar* alpha1    = new RooRealVar(Form("%s_res_alpha1", name), "alpha1", 1.4, 0.1, 10.);
-    RooRealVar* alpha2    = new RooRealVar(Form("%s_res_alpha2", name), "alpha2", 1.2, 0.1, 10.);
-    RooRealVar* mean      = new RooRealVar(Form("%s_res_mean"  , name), "mean", 0.0, -0.3, 0.3);// mean->setConstant(true);
-    RooRealVar* n1        = new RooRealVar(Form("%s_res_n1"    , name), "enne1", 7.3, 0.1, 30.);
-    RooRealVar* n2        = new RooRealVar(Form("%s_res_n2"    , name), "enne2", 6.7, 0.1, 30.);
-    RooRealVar* sigma     = new RooRealVar(Form("%s_res_sigma" , name), "sigma", 0.1, 0.001, 1.);
-    resolution = new RooCrystalBall(Form("%s_res_pdf"  , name), "DIO resolution", obs, *mean, *sigma, *alpha1, *n1, *alpha2, *n2);
+  const int fit_version = 1; // 0: Convolve with response; 1: approx model
 
-    if(selection == 20) {
-      alpha1   ->setVal( 0.101064 ); // +/- 0.748468
-      alpha2   ->setVal( 3.65888  ); // +/- 875.439
-      mean     ->setVal( -0.299851); // +/- 0.0237112
-      n1       ->setVal( 29.6829  ); // +/- 101.184
-      n2       ->setVal( 24.8761  ); // +/- 1.53563e+07
-      sigma    ->setVal( 0.0127344); // +/- 0.111337
+  RooAbsPdf* pdf = nullptr;
+  if(fit_version == 0) {
+    RooAbsPdf* resolution = nullptr;
+    const int resolution_version = 0;
+
+    if(resolution_version == 0) { // double-sided Crystal Ball
+      RooRealVar* alpha1    = new RooRealVar(Form("%s_res_alpha1", name), "alpha1", 1.4, 0.1, 10.);
+      RooRealVar* alpha2    = new RooRealVar(Form("%s_res_alpha2", name), "alpha2", 1.2, 0.1, 10.);
+      RooRealVar* mean      = new RooRealVar(Form("%s_res_mean"  , name), "mean", 0.0, -0.3, 0.3);// mean->setConstant(true);
+      RooRealVar* n1        = new RooRealVar(Form("%s_res_n1"    , name), "enne1", 7.3, 0.1, 30.);
+      RooRealVar* n2        = new RooRealVar(Form("%s_res_n2"    , name), "enne2", 6.7, 0.1, 30.);
+      RooRealVar* sigma     = new RooRealVar(Form("%s_res_sigma" , name), "sigma", 0.1, 0.001, 1.);
+      resolution = new RooCrystalBall(Form("%s_res_pdf"  , name), "DIO resolution", obs, *mean, *sigma, *alpha1, *n1, *alpha2, *n2);
+
+      if(selection == 20) {
+        alpha1   ->setVal( 0.101064 ); // +/- 0.748468
+        alpha2   ->setVal( 3.65888  ); // +/- 875.439
+        mean     ->setVal( -0.299851); // +/- 0.0237112
+        n1       ->setVal( 29.6829  ); // +/- 101.184
+        n2       ->setVal( 24.8761  ); // +/- 1.53563e+07
+        sigma    ->setVal( 0.0127344); // +/- 0.111337
+      }
+
+      alpha1 ->setConstant(freeze);
+      alpha2 ->setConstant(freeze);
+      mean   ->setConstant(freeze);
+      n1     ->setConstant(freeze);
+      n2     ->setConstant(freeze);
+      sigma  ->setConstant(freeze);
+      // } else if(resolution_version == 1) { // Landau + power-law tails
+      //   RooRealVar* alpha1    = new RooRealVar(Form("%s_res_alpha1", name), "alpha1", 1.4, 0.1, 3.);
+      //   RooRealVar* alpha2    = new RooRealVar(Form("%s_res_alpha2", name), "alpha2", 1.0, 0.1, 3.);
+      //   RooRealVar* mean      = new RooRealVar(Form("%s_res_mean"  , name), "mean", -0.5, -1.5, 1.5);// mean->setConstant(true);
+      //   RooRealVar* n1        = new RooRealVar(Form("%s_res_n1"    , name), "n1", 1.5, 0.1, 10.);
+      //   RooRealVar* n2        = new RooRealVar(Form("%s_res_n2"    , name), "n2", 5.0, 0.1, 20.);
+      //   RooRealVar* a         = new RooRealVar(Form("%s_res_a"     , name), "a", 0.3, 0.1, 1.);
+      //   RooRealVar* b         = new RooRealVar(Form("%s_res_b"     , name), "b", 4.7, 0.1, 10.);
+      //   resolution = new RooLandauCB(Form("%s_res_pdf"  , name), "DIO resolution", obs, *mean, *a, *b, *alpha1, *n1, *alpha2, *n2);
+
+      //   alpha1 ->setConstant(freeze);
+      //   alpha2 ->setConstant(freeze);
+      //   mean   ->setConstant(freeze);
+      //   n1     ->setConstant(freeze);
+      //   n2     ->setConstant(freeze);
+      //   a      ->setConstant(freeze);
+      //   b      ->setConstant(freeze);
     }
 
-    alpha1 ->setConstant(freeze);
-    alpha2 ->setConstant(freeze);
-    mean   ->setConstant(freeze);
-    n1     ->setConstant(freeze);
-    n2     ->setConstant(freeze);
-    sigma  ->setConstant(freeze);
-  // } else if(resolution_version == 1) { // Landau + power-law tails
-  //   RooRealVar* alpha1    = new RooRealVar(Form("%s_res_alpha1", name), "alpha1", 1.4, 0.1, 3.);
-  //   RooRealVar* alpha2    = new RooRealVar(Form("%s_res_alpha2", name), "alpha2", 1.0, 0.1, 3.);
-  //   RooRealVar* mean      = new RooRealVar(Form("%s_res_mean"  , name), "mean", -0.5, -1.5, 1.5);// mean->setConstant(true);
-  //   RooRealVar* n1        = new RooRealVar(Form("%s_res_n1"    , name), "n1", 1.5, 0.1, 10.);
-  //   RooRealVar* n2        = new RooRealVar(Form("%s_res_n2"    , name), "n2", 5.0, 0.1, 20.);
-  //   RooRealVar* a         = new RooRealVar(Form("%s_res_a"     , name), "a", 0.3, 0.1, 1.);
-  //   RooRealVar* b         = new RooRealVar(Form("%s_res_b"     , name), "b", 4.7, 0.1, 10.);
-  //   resolution = new RooLandauCB(Form("%s_res_pdf"  , name), "DIO resolution", obs, *mean, *a, *b, *alpha1, *n1, *alpha2, *n2);
+    RooRealVar* ep        = new RooRealVar(Form("%s_theory_ep", name), "ep",  104.975   ); ep->setConstant(true);
+    RooRealVar* a5        = new RooRealVar(Form("%s_theory_a5", name), "a5",  8.9       ); a5->setConstant(true);
+    RooRealVar* a6        = new RooRealVar(Form("%s_theory_a6", name), "a6",  1.17169   ); a6->setConstant(true);
+    RooRealVar* a7        = new RooRealVar(Form("%s_theory_a7", name), "a7", -1.06599e-2); a7->setConstant(true);
+    RooRealVar* a8        = new RooRealVar(Form("%s_theory_a8", name), "a8",  8.14251e-3); a8->setConstant(true);
+    RooRealVar* mmu       = new RooRealVar(Form("%s_theory_mmu", name), "mmu",  105.658 ); mmu->setConstant(true);
+    RooRealVar* fl        = new RooRealVar(Form("%s_theory_fl", name), "fl",  0.023343129 ); fl->setConstant(true);
 
-  //   alpha1 ->setConstant(freeze);
-  //   alpha2 ->setConstant(freeze);
-  //   mean   ->setConstant(freeze);
-  //   n1     ->setConstant(freeze);
-  //   n2     ->setConstant(freeze);
-  //   a      ->setConstant(freeze);
-  //   b      ->setConstant(freeze);
+    RooAbsPdf* theory     = new RooGenericPdf(Form("%s_theory", name), "(@0 < @1)*(@2*pow(@1-@0,5) + @3*pow(@1-@0,6) + @4*pow(@1-@0,7) + @5*pow(@1-@0,8))*pow(max(0., (@1-@0))/@6,@7)",
+                                              RooArgList(obs, *ep, *a5, *a6, *a7, *a8, *mmu, *fl));
+    // RooAbsPdf* theory     = new RooGenericPdf(Form("%s_theory", name), "(@0 < @1)*(@2*pow(@1-@0,5) + @3*pow(@1-@0,6) + @4*pow(@1-@0,7) + @5*pow(@1-@0,8))",
+    //                                           RooArgList(obs, *ep, *a5, *a6, *a7, *a8));
+
+    // obs.setBinning(RooBinning(10000, obs.getMin(), obs.getMax()), "cache"); // for discrete convolution
+    // auto pdf        = new RooFFTConvPdf(Form("%s_pdf", name), "DIO PDF", obs, *theory, *resolution, 2);
+    // pdf->setBufferFraction(1.);
+    // pdf->setBufferStrategy(RooFFTConvPdf::Flat); //Extend, Flat, or Mirror
+    pdf        = new RooNumConvPdf(Form("%s_pdf", name), "DIO PDF", obs, *theory, *resolution);
+  } else if(fit_version == 1) {
+    RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);
+    RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
+    RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
+    RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 1.932, 0.01, 5.0);
+    pdf = new RooGenericPdf(Form("%s_pdf", name), "Gamma-Poly Hybrid",
+                                 Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
+                                      obs.GetName(), x0->GetName(), alpha->GetName(),
+                                      obs.GetName(), beta->GetName(),
+                                      lambda->GetName(), obs.GetName()),
+                                 RooArgList(obs, *x0, *alpha, *beta, *lambda));
   }
-
-  RooRealVar* ep        = new RooRealVar(Form("%s_theory_ep", name), "ep",  104.975   ); ep->setConstant(true);
-  RooRealVar* a5        = new RooRealVar(Form("%s_theory_a5", name), "a5",  8.9       ); a5->setConstant(true);
-  RooRealVar* a6        = new RooRealVar(Form("%s_theory_a6", name), "a6",  1.17169   ); a6->setConstant(true);
-  RooRealVar* a7        = new RooRealVar(Form("%s_theory_a7", name), "a7", -1.06599e-2); a7->setConstant(true);
-  RooRealVar* a8        = new RooRealVar(Form("%s_theory_a8", name), "a8",  8.14251e-3); a8->setConstant(true);
-  RooRealVar* mmu       = new RooRealVar(Form("%s_theory_mmu", name), "mmu",  105.658 ); mmu->setConstant(true);
-  RooRealVar* fl        = new RooRealVar(Form("%s_theory_fl", name), "fl",  0.023343129 ); fl->setConstant(true);
-
-  RooAbsPdf* theory     = new RooGenericPdf(Form("%s_theory", name), "(@0 < @1)*(@2*pow(@1-@0,5) + @3*pow(@1-@0,6) + @4*pow(@1-@0,7) + @5*pow(@1-@0,8))*pow(max(0., (@1-@0))/@6,@7)",
-                                            RooArgList(obs, *ep, *a5, *a6, *a7, *a8, *mmu, *fl));
-  // RooAbsPdf* theory     = new RooGenericPdf(Form("%s_theory", name), "(@0 < @1)*(@2*pow(@1-@0,5) + @3*pow(@1-@0,6) + @4*pow(@1-@0,7) + @5*pow(@1-@0,8))",
-  //                                           RooArgList(obs, *ep, *a5, *a6, *a7, *a8));
-
-  // obs.setBinning(RooBinning(10000, obs.getMin(), obs.getMax()), "cache"); // for discrete convolution
-  // auto pdf        = new RooFFTConvPdf(Form("%s_pdf", name), "DIO PDF", obs, *theory, *resolution, 2);
-  // pdf->setBufferFraction(1.);
-  // pdf->setBufferStrategy(RooFFTConvPdf::Flat); //Extend, Flat, or Mirror
-  auto pdf        = new RooNumConvPdf(Form("%s_pdf", name), "DIO PDF", obs, *theory, *resolution);
 
   const double rate_per_run1 = 10000.; //FIXME
 
