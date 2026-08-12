@@ -1,0 +1,53 @@
+BasedOnStyle: LLVM
+Language: Cpp
+
+# Indentation & Tabs
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+
+# Condition Formatting: if(<condition>) instead of if (<condition>)
+SpaceBeforeParens: Custom
+SpaceBeforeParensOptions:
+  AfterControlStatements: false
+  AfterForeachMacros: false
+  AfterIfMacros: false
+ 
+# Parentheses Padding: No spaces inside the parentheses
+SpacesInParentheses: false
+
+# Brace Wrapping: Keeps braces attached to control statements and else
+BreakBeforeBraces: Attach
+
+# Include Headers Organization
+SortIncludes: true
+IncludeBlocks: Regroup
+
+# Assign priority rules (Lower numbers appear first)
+IncludeCategories:
+  # 1. Main header corresponding to this source file (e.g., Foo.h for Foo.cpp)
+  - Regex: '^"(.*)\.h"'
+    Priority: 0
+  # 2. System / Standard Library headers in angle brackets (e.g., <vector>, <string>)
+  - Regex: '^<[a-z_]+>'
+    Priority: 1
+  # 3. Third-party dependency headers (e.g., <gtest/gtest.h>, <boost/any.hpp>)
+  - Regex: '^<.*>'
+    Priority: 2
+  # 4. Project-local headers using relative paths or quotes
+  - Regex: '^".*"'
+    Priority: 3
+
+# Alignment of wrapped arguments
+AlignAfterOpenBracket: BlockIndent
+ContinuationIndentWidth: 4
+
+
+# Rest of the setting
+ColumnLimit: 200
+PointerAlignment: Left
+DerivePointerAlignment: false
+SpaceAfterCStyleCast: false
+MaxEmptyLinesToKeep: 1
+Standard: Latest
+NamespaceIndentation: All

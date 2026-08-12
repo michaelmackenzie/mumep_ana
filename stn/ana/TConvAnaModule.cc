@@ -113,7 +113,8 @@ namespace mumep_ana {
       TString name = fSystematics.GetName(isys);
       if(name == "")
         continue;
-      HBook1F(Hist->fObs[isys], Form("obs_%i", isys), Form("%s: Systematic %s", Folder, name.Data()), 300, 80., 110., Folder); // FIXME: This should inherit from the nominal observable binning
+      // FIXME: This should inherit from the nominal observable binning
+      HBook1F(Hist->fObs[isys], Form("obs_%i", isys), Form("%s: Systematic %s", Folder, name.Data()), 300, 80., 110., Folder);
       // For debug investigations
       if(fFillVerboseSys) {
         HBook1F(Hist->fDeltaObs[isys], Form("delta_obs_%i", isys), Form("%s: Systematic %s: #DeltaObs", Folder, name.Data()), 100, -2., 2., Folder);
@@ -973,9 +974,6 @@ namespace mumep_ana {
     // const float trkqual = fTrkPar.fTrkQual;
     if(fTrack && crv_stub_par && fTrack->fFitCons > 1.e-5 && trkqual > 0.2 && (pid < -10.f || pid > 0.5f) && fTrack->P() > 80.0 && fTrack->P() < 130.0 && fTrack->fT0 > 600. && fTrack->fT0 < 1650.) {
       const int trk_id = TrackID(fTrkPar);
-      // const int id_no_crv = trk_id & (~(1 << kCRV)); //ID without the CRV coincidence cluster
-      // considered const int id_no_crv_no_us = id_no_crv & (~(1 << kUpstream)); //ID without the
-      // CRV veto or Upstream veto
 
       int index = 80;
       FillEventHistograms(fHist.fEvent[index], &fEvtPar, fEvtPar.fWeight);
@@ -1119,9 +1117,6 @@ namespace mumep_ana {
       InitClusterPar(fTrkPar.fCluster, &fClusterPar);
       fEvtPar.fWeight = 1.f; // Ignore weights
       const int mc_pdg = std::abs(fTrack->PDGCode());
-      // const bool has_cluster = fTrack->fClusterE > 0.f;
-      // const bool mc_downstream = fTrack->fMcDirection > 0;
-      // const float tzslope = fTrkPar.fTZSlope;
       if(mc_pdg == 11 && fTrack->Charge() < 0)
         FillAllHistograms(190);
       fEvtPar.fWeight = nominal_weight;
@@ -1585,12 +1580,8 @@ namespace mumep_ana {
       ID += 1 << kFitCon;
     if(trkpar.STBoundary() == 0)
       ID += 1 << kD0; // consistent with ST
-    // float d0_sign = track->fD0 * track->Charge();
-    // if(d0_sign < -100. || d0_sign > 60.)                       ID += 1 << kD0; //consistent with
-    // ST
     if(track->fTanDip < 0.5 || track->fTanDip > 2.0)
       ID += 1 << kTDip;
-    // if(track->fTanDip < 0.5 || track->fTanDip > 1.5)           ID += 1 << kTDip;
     if(track->T0() < 500. || track->T0() > 1650.)
       ID += 1 << kT0Loose; // for control regions
 
@@ -1598,9 +1589,8 @@ namespace mumep_ana {
     auto us_trk = trkpar.fUpstreamTrack;
     if(us_trk) {
       // minimal selection on the upstream track quality
-      // if(us_trk->fFitCons > 1.e-5 && (us_trk->TrkQual() < -10. || us_trk->TrkQual() > 0.01))
       const double us_dt = track->T0() - us_trk->T0();
-      if(us_dt > 60. && us_dt < 110.) // window of time on the upstream leg
+      if(us_dt > 40. && us_dt < 110.) // window of time on the upstream leg
         ID += 1 << kUpstream;
     }
 
@@ -1640,7 +1630,6 @@ namespace mumep_ana {
     bool tagged(false);
     auto crv_stub_par = trkpar.fCRVStubPar;
     if(crv_stub_par) {
-      // const float deltat_calo = fTrack->fT0 - crv_stub_par->fApproxTimeCaloToFront; //consider
       // both trajectory hypotheses
       const float deltat_st = trkpar.CRVSTDeltaT();                 // ST origin
       const float deltat_calo = trkpar.CRVCaloFrontDeltaT(false);   // for electron tracks from calo
@@ -1648,18 +1637,12 @@ namespace mumep_ana {
       const float deltat_crv = fTrack->fT0 - crv_stub_par->fTime;   // effective for upstream misreconstruction
       tagged |= (deltat_st > -40.f && deltat_st < 50.f);            // ST hypothesis
       tagged |= (deltat_calo > -30.f && deltat_calo < 40.f);        // Calo hypothesis
-      // tagged |= (deltat_crv > -10.f && deltat_crv < 10.f); // Upstream hypothesis
       if(track->fClusterE <= 0.) {
         tagged |= deltat_calo_mu > -40.f && deltat_calo_mu < 50.f; // Muon hypothesis if no cluster for PID
         tagged |= (deltat_crv > -10.f && deltat_crv < 10.f);       // Upstream hypothesis
       }
       if(tagged)
         ID += 1 << kCRV;
-
-      // const float min_extrap_dt(-50.f), max_extrap_dt(60.f);
-      // if((deltat_st   > min_extrap_dt && deltat_st   < max_extrap_dt) ||
-      //    (deltat_calo > min_extrap_dt && deltat_calo < max_extrap_dt) ||
-      //    (deltat_crv > -25.f && deltat_crv < 0.f))               ID += 1 << kCRV;
     }
 
     // MC selection to match MC cuts applied to the Mock Data Samples
@@ -1670,18 +1653,6 @@ namespace mumep_ana {
         mc_selection &= trkpar.fGenE <= 0. || trkpar.fGenE > 95.f; // only included DIO with E > 95 MeV
       }
     }
-
-    // if(fPrimary
-    //    && fPrimary->CreationCode() != mu2e::ProcessCode::mu2eFlatPhoton  // FIXME: don't cut on
-    //    RMC photons for now
-    //    && trkpar.fTrack->Charge() < 0) {  // Only apply this to negative tracks
-    //   mc_selection &= trkpar.fGenE <= 0. || trkpar.fGenE > 95.f; // only included DIO with E > 95
-    //   MeV
-    //   // mc_selection &= trkpar.fGenE <= 0. || trkpar.fGenE > 80.f;
-    // } else if(fPrimary) {
-    //   mc_selection &= trkpar.fGenE <= 0. || trkpar.fGenE > 85.f; // only include positrons > 85
-    //   MeV
-    // }
 
     // MC-truth cut, don't include pileup in background-specific histogramming
     if(fDataType == kBackground) {
