@@ -8,7 +8,7 @@
 #include "fit_workspace_utils.C"
 #include "../physics.C"
 
-int rpc_int_fit(TString process = "mumem", int selection = 20, TString tag = "") {
+int rpc_int_fit(TString process = "mumem", int selection = 20, TString tag = "", TString pdf_type = "auto") {
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag); //initialize normalization info
   const char* figdir = Form("figures/rpc_int%s", (tag == "") ? "" : ("_"+tag).Data());
@@ -41,14 +41,20 @@ int rpc_int_fit(TString process = "mumem", int selection = 20, TString tag = "")
   RooDataHist data_hist("rpc_int_data_hist", "RPC (internal) input", obs, h);
 
   // Create the PDF
-  RooAbsPdf* pdf = get_rpc_int_model(obs, process, selection, false).pdf_;
+  RooAbsPdf* model_pdf = get_rpc_int_model(obs, process, selection, false).pdf_;
+  RooAbsPdf* pdf = choose_pdf_model(pdf_type,
+                                    hist_pdfs_,
+                                    obs,
+                                    data_hist,
+                                    model_pdf,
+                                    Form("%s_%i_rpc_int_pdf", process.Data(), selection),
+                                    "RPC (internal) background",
+                                    h);
 
   //----------------------------------------------
   // Perform the fit
 
-  const TString name = Form("%s_%i_rpc_int", process.Data(), selection);
-  enforce_uniform_if_sparse(h, obs, pdf, Form("%s_pdf", name.Data()), "RPC (internal) background");
-  pdf->fitTo(data_hist, RooFit::SumW2Error(true));
+  if(run_component_fit(pdf, data_hist, pdf_type, hist_pdfs_)) return 20;
 
 
   //----------------------------------------------

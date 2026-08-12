@@ -4,6 +4,196 @@
 
 #include "../tools/utilities.C"
 
+TString normalize_pdf_type(TString pdf_type) {
+  pdf_type.ToLower();
+  pdf_type.ReplaceAll(" ", "");
+  return pdf_type;
+}
+
+int parse_poly_degree(const TString& pdf_type, const int default_degree = 1) {
+  TString lower = normalize_pdf_type(pdf_type);
+  if(!lower.BeginsWith("poly")) return default_degree;
+  TString degree_str = lower;
+  degree_str.ReplaceAll("poly", "");
+  if(degree_str.Length() == 0) return default_degree;
+  const int degree = degree_str.Atoi();
+  return std::max(0, degree);
+}
+
+RooAbsPdf* make_poly_pdf(RooRealVar& obs,
+                         const TString& pdf_name,
+                         const TString& pdf_title,
+                         const int degree) {
+  RooArgList coeffs;
+  for(int i = 0; i <= degree; ++i) {
+    auto coeff = new RooRealVar(Form("%s_p%i", pdf_name.Data(), i),
+                                Form("poly coeff %i", i),
+                                0.0, -1.0, 1.0);
+    coeffs.add(*coeff);
+  }
+  return new RooChebychev(pdf_name, pdf_title, obs, coeffs);
+}
+
+RooAbsPdf* make_crystal_ball_pdf(RooRealVar& obs,
+                                 const TString& pdf_name,
+                                 const TString& pdf_title) {
+  const double xmin = obs.getMin();
+  const double xmax = obs.getMax();
+  const double center = 0.5*(xmin + xmax);
+  const double width = std::max(1.e-3, 0.1*(xmax - xmin));
+
+  auto mean   = new RooRealVar(Form("%s_cb_mean", pdf_name.Data()), "CB mean", center, xmin, xmax);
+  auto sigma  = new RooRealVar(Form("%s_cb_sigma", pdf_name.Data()), "CB sigma", width, 1.e-3, std::max(0.2, xmax - xmin));
+  auto alphaL = new RooRealVar(Form("%s_cb_alphaL", pdf_name.Data()), "CB alphaL", 1.5, 0.1, 10.0);
+  auto nL     = new RooRealVar(Form("%s_cb_nL", pdf_name.Data()), "CB nL", 3.0, 0.1, 50.0);
+  auto alphaR = new RooRealVar(Form("%s_cb_alphaR", pdf_name.Data()), "CB alphaR", 1.5, 0.1, 10.0);
+  auto nR     = new RooRealVar(Form("%s_cb_nR", pdf_name.Data()), "CB nR", 3.0, 0.1, 50.0);
+  return new RooCrystalBall(pdf_name, pdf_title, obs, *mean, *sigma, *alphaL, *nL, *alphaR, *nR);
+}
+
+RooAbsPdf* choose_pdf_model(const TString& requested_pdf_type,
+                            const bool default_hist_pdf,
+                            RooRealVar& obs,
+                            RooDataHist& data_hist,
+                            RooAbsPdf* analytic_pdf,
+                            const TString& pdf_name,
+                            const TString& pdf_title,
+                            TH1* sparse_hist = nullptr,
+                            const double sparse_uniform_threshold = 0.75) {
+  const TString mode = normalize_pdf_type(requested_pdf_type);
+  RooAbsPdf* pdf = nullptr;
+
+  if(mode == "auto") {
+    pdf = (default_hist_pdf || !analytic_pdf)
+      ? static_cast<RooAbsPdf*>(new RooHistPdf(pdf_name, pdf_title, obs, data_hist))
+      : analytic_pdf;
+  } else if(mode == "hist" || mode == "histogram") {
+    pdf = new RooHistPdf(pdf_name, pdf_title, obs, data_hist);
+  } else if(mode == "uniform") {
+    pdf = new RooUniform(pdf_name, pdf_title, obs);
+  } else if(mode.BeginsWith("poly")) {
+    pdf = make_poly_pdf(obs, pdf_name, pdf_title, parse_poly_degree(mode, 1));
+  } else if(mode == "cb" || mode == "crystalball") {
+    pdf = make_crystal_ball_pdf(obs, pdf_name, pdf_title);
+  } else if(mode == "analytic" || mode == "model") {
+    pdf = analytic_pdf;
+  }
+
+  if((mode == "analytic" || mode == "model") && !pdf) {
+    cout << __func__ << ": Analytic model requested for " << pdf_name.Data()
+         << " but no analytic model is available, using histogram PDF instead." << endl;
+    pdf = new RooHistPdf(pdf_name, pdf_title, obs, data_hist);
+  }
+
+  if(!pdf) {
+    cout << __func__ << ": Unknown PDF type \"" << requested_pdf_type.Data()
+         << "\", using auto mode" << endl;
+    pdf = (default_hist_pdf)
+      ? static_cast<RooAbsPdf*>(new RooHistPdf(pdf_name, pdf_title, obs, data_hist))
+      : analytic_pdf;
+  }
+
+  if(mode == "auto" && sparse_hist) {
+    enforce_uniform_if_sparse(sparse_hist, obs, pdf, pdf_name, pdf_title, sparse_uniform_threshold);
+  }
+  return pdf;
+}
+
+bool should_fit_pdf(const TString& requested_pdf_type, const bool default_hist_pdf) {
+  const TString mode = normalize_pdf_type(requested_pdf_type);
+  if(mode == "uniform") return false;
+  if(mode == "hist" || mode == "histogram") return false;
+  if(mode == "auto" && default_hist_pdf) return false;
+  return true;
+}
+
+int run_component_fit(RooAbsPdf* pdf,
+                      RooDataHist& data_hist,
+                      const TString& requested_pdf_type,
+                      const bool default_hist_pdf,
+                      const bool use_sumw2 = true,
+                      const TString& fit_range = "") {
+  if(!pdf) return 1;
+  if(pdf->InheritsFrom("RooHistPdf") || pdf->InheritsFrom("RooUniform")) return 0;
+  if(!should_fit_pdf(requested_pdf_type, default_hist_pdf)) return 0;
+
+  if(fit_range != "") {
+    if(use_sumw2) pdf->fitTo(data_hist, RooFit::Range(fit_range.Data()), RooFit::SumW2Error(true));
+    else          pdf->fitTo(data_hist, RooFit::Range(fit_range.Data()));
+  } else {
+    if(use_sumw2) pdf->fitTo(data_hist, RooFit::SumW2Error(true));
+    else          pdf->fitTo(data_hist);
+  }
+  return 0;
+}
+
+void smooth_tail_from_reference(TH1* h,
+                                const TH1* reference,
+                                const double fit_xmin,
+                                const double xmax,
+                                const double rel_err = 0.2) {
+  if(!h || !reference) return;
+  for(int ibin = h->FindBin(fit_xmin + 1.e-6); ibin <= h->FindBin(xmax - 1.e-6); ++ibin) {
+    const double x = h->GetBinCenter(ibin);
+    const double val = reference->Interpolate(x) * h->GetBinWidth(ibin) / reference->GetBinWidth(ibin);
+    h->SetBinContent(ibin, val);
+    h->SetBinError(ibin, std::max(0., rel_err*val));
+  }
+}
+
+int smooth_right_tail(TH1* h,
+                      TH1* h_orig,
+                      const TString& fig_path,
+                      const TString& model,
+                      const double fit_xmin,
+                      const double fit_xmax,
+                      const int nsmooth = 0,
+                      const double rel_err = 0.2,
+                      const bool use_weighted_fit = true,
+                      const std::vector<double>& init_params = {}) {
+  if(!h) return 1;
+  if(nsmooth > 0) h->Smooth(nsmooth);
+
+  TString lower = normalize_pdf_type(model);
+  if(lower == "none" || lower == "") return 0;
+
+  TF1* tail_func = nullptr;
+  if(lower == "exp") {
+    tail_func = new TF1("tail_func", "exp([0] + [1]*x)", fit_xmin, fit_xmax);
+  } else if(lower == "power") {
+    tail_func = new TF1("tail_func", "pow(max(1.e-9, (x-[0])/[1]), [2])", fit_xmin, fit_xmax);
+  } else {
+    cout << __func__ << ": Unknown smoothing model \"" << model.Data() << "\"" << endl;
+    return 2;
+  }
+
+  for(size_t i = 0; i < init_params.size(); ++i) tail_func->SetParameter(i, init_params[i]);
+
+  const TString fit_opt = (use_weighted_fit) ? "wR" : "R";
+  h->Fit(tail_func, fit_opt.Data());
+  for(int ibin = h->FindBin(fit_xmin + 1.e-6); ibin <= h->FindBin(fit_xmax - 1.e-6); ++ibin) {
+    const double x = h->GetBinCenter(ibin);
+    const double val = tail_func->Eval(x);
+    h->SetBinContent(ibin, val);
+    h->SetBinError(ibin, std::max(0., rel_err*val));
+  }
+
+  if(fig_path != "") {
+    TCanvas c;
+    if(h_orig) {
+      h_orig->Draw("E1");
+      h->SetLineColor(kRed);
+      h->Draw("E1 same");
+    } else {
+      h->Draw("E1");
+    }
+    tail_func->Draw("same");
+    c.SetLogy();
+    c.SaveAs(fig_path.Data());
+  }
+  return 0;
+}
+
 TH1* convolve_with_resolution(TH1* theory, TH1* resolution) {
   TH1* result = (TH1*) theory->Clone("result");
   result->Reset();

@@ -9,7 +9,8 @@
 #include "../physics.C"
 
 //---------------------------------------------------------------------------------------------------------------------------
-int signal_fit(TString process = "mumem", int selection = 20, TString tag = "", const int isys = -1) {
+int signal_fit(TString process = "mumem", int selection = 20, TString tag = "", const int isys = -1,
+               TString pdf_type = "auto", TString tail_model = "exp") {
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag); //initialize normalization info
   const bool is_mumem = process == "mumem";
@@ -33,29 +34,20 @@ int signal_fit(TString process = "mumem", int selection = 20, TString tag = "", 
   h = trim_hist(h, xmin, xmax);
   cout << "Nominal integral: " << h->Integral() << endl;
 
-  // Attempt to smooth the histogram a bit
-  {
-    TCanvas c;
-    h_orig->Draw("E1");
-    h_orig->SetAxisRange(xmin, xmax, "X");
-
-    // Attempt to fit the histogram tail to further smooth it
-    const double fit_xmin((is_mumem) ? 105.5 : 93.);
-    TF1* tail_func = new TF1("tail_func", "exp([0] + [1]*x)", fit_xmin, xmax);
-    if(is_mumem) tail_func->SetParameters(353., -3.4);
-    else         tail_func->SetParameters(316., -3.5);
-    h->Fit(tail_func, "R");
-    tail_func->Draw("same");
-    c.SetLogy();
-    c.SaveAs(Form("%s/signal_smoothing_%i%s.png", figdir, selection, (isys < 0) ? "" : Form("_sys_%i", isys)));
-
-    for(int ibin = h->FindBin(fit_xmin+1.e-6); ibin <= h->FindBin(xmax-1.e-6); ++ibin) {
-      const float x = h->GetBinCenter(ibin);
-      const float val = tail_func->Eval(x);
-      h->SetBinContent(ibin, val);
-      h->SetBinError(ibin, 0.2*val); //default to 20% uncertainty on the fit result
-    }
-  }
+  // Smooth the right side of the signal spectrum to suppress sparse-bin spikes.
+  const double fit_xmin = (is_mumem) ? 105.5 : 93.;
+  std::vector<double> tail_params;
+  if(tail_model == "exp") tail_params = (is_mumem) ? std::vector<double>{353., -3.4} : std::vector<double>{316., -3.5};
+  smooth_right_tail(h,
+                    h_orig,
+                    Form("%s/signal_smoothing_%i%s.png", figdir, selection, (isys < 0) ? "" : Form("_sys_%i", isys)),
+                    tail_model,
+                    fit_xmin,
+                    xmax,
+                    0,
+                    0.2,
+                    false,
+                    tail_params);
 
   //----------------------------------------------
   // Construct the fit objects
@@ -68,9 +60,15 @@ int signal_fit(TString process = "mumem", int selection = 20, TString tag = "", 
   RooDataHist data_hist("signal_data_hist", "Signal input", obs, h);
 
   // Create the PDF
-  RooAbsPdf* pdf = (hist_pdfs_) ?
-    new RooHistPdf(Form("%s_%i_signal_pdf", process.Data(), selection), "Signal PDF", obs, data_hist) :
-    get_signal_model(obs, process, selection, false).pdf_;
+  RooAbsPdf* model_pdf = get_signal_model(obs, process, selection, false).pdf_;
+  RooAbsPdf* pdf = choose_pdf_model(pdf_type,
+                                    hist_pdfs_,
+                                    obs,
+                                    data_hist,
+                                    model_pdf,
+                                    Form("%s_%i_signal_pdf", process.Data(), selection),
+                                    "Signal PDF",
+                                    h);
   if(!pdf) {
     cout << "No PDF returned!\n";
     return 10;
@@ -79,9 +77,9 @@ int signal_fit(TString process = "mumem", int selection = 20, TString tag = "", 
   //----------------------------------------------
   // Perform the fit
 
-  if(!hist_pdfs_) {
+  if(should_fit_pdf(pdf_type, hist_pdfs_)) {
     obs.setMax((is_mumem) ? 107. : 95.);
-    pdf->fitTo(data_hist);
+    if(run_component_fit(pdf, data_hist, pdf_type, hist_pdfs_, false)) return 20;
     obs.setMax(xmax);
   }
 

@@ -8,7 +8,7 @@
 #include "fit_workspace_utils.C"
 #include "../physics.C"
 
-int rmc_ext_fit(TString process = "mumem", int selection = 20, TString tag = "") {
+int rmc_ext_fit(TString process = "mumem", int selection = 20, TString tag = "", TString pdf_type = "auto") {
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag); //initialize normalization info
   const char* figdir = Form("figures/rmc_ext%s", (tag == "") ? "" : ("_"+tag).Data());
@@ -31,33 +31,17 @@ int rmc_ext_fit(TString process = "mumem", int selection = 20, TString tag = "")
   TH1* h_orig = h;
   h = trim_hist(h, xmin, xmax); // restrict to the relevant range
 
-  // Attempt to smooth the histogram a bit
-  const int nsmooth(1);
-  if(nsmooth > 0) h->Smooth(nsmooth);
-  {
-    TCanvas c;
-    h_orig->Draw("E1");
-    h->Draw("E1 same");
-    h->SetLineColor(kRed);
-    h_orig->SetAxisRange(xmin, xmax, "X");
-
-    // Attempt to fit the histogram tail to further smooth it
-    const double fit_xmin(99.5);
-    TF1* tail_func = new TF1("tail_func", "exp([0] + [1]*x)", fit_xmin, xmax);
-    tail_func->SetParameters(473., -4.6);
-    // tail_func->FixParameter(1, -4.6);
-    h->Fit(tail_func, "wR");
-    tail_func->Draw("same");
-    c.SetLogy();
-    c.SaveAs(Form("%s/rmc_ext_smoothing_%i.png", figdir, selection));
-
-    for(int ibin = h->FindBin(fit_xmin+1.e-6); ibin <= h->FindBin(xmax-1.e-6); ++ibin) {
-      const float x = h->GetBinCenter(ibin);
-      const float val = tail_func->Eval(x);
-      h->SetBinContent(ibin, val);
-      h->SetBinError(ibin, 0.2*val); //default to 20% uncertainty on the fit result
-    }
-  }
+  // Smooth the right tail to stabilize sparse high-momentum bins.
+  smooth_right_tail(h,
+                    h_orig,
+                    Form("%s/rmc_ext_smoothing_%i.png", figdir, selection),
+                    "exp",
+                    99.5,
+                    xmax,
+                    1,
+                    0.2,
+                    true,
+                    {473., -4.6});
 
   //----------------------------------------------
   // Construct the fit objects
@@ -70,18 +54,20 @@ int rmc_ext_fit(TString process = "mumem", int selection = 20, TString tag = "")
   RooDataHist data_hist(Form("%s_%i_rmc_ext_data_hist", process.Data(), selection), "RMC (external) input", obs, h);
 
   // Create the PDF
-  auto hist_pdf = new RooHistPdf("hist_pdf", "RMC (external) PDF", obs, data_hist);
-  auto shape_pdf = get_rmc_ext_model(obs, process, selection, false).pdf_;
-  RooAbsPdf* pdf = (hist_pdfs_) ? hist_pdf : shape_pdf;
-  pdf->SetName(Form("%s_%i_rmc_ext_pdf", process.Data(), selection));
+  RooAbsPdf* shape_pdf = get_rmc_ext_model(obs, process, selection, false).pdf_;
+  RooAbsPdf* pdf = choose_pdf_model(pdf_type,
+                                    hist_pdfs_,
+                                    obs,
+                                    data_hist,
+                                    shape_pdf,
+                                    Form("%s_%i_rmc_ext_pdf", process.Data(), selection),
+                                    "RMC (external) PDF",
+                                    h);
 
   //----------------------------------------------
   // Perform the fit
 
-  // obs.setRange("fit_range", 97., 102.);
-  // shape_pdf->fitTo(data_hist, RooFit::Range("fit_range"));
-  shape_pdf->fitTo(data_hist);
-  shape_pdf->Print("tree");
+  if(run_component_fit(pdf, data_hist, pdf_type, hist_pdfs_)) return 20;
 
 
   //----------------------------------------------

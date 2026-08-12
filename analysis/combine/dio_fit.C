@@ -9,7 +9,8 @@
 #include "fit_workspace_utils.C"
 #include "../physics.C"
 
-int dio_fit(TString process = "mumem", int selection = 20, TString tag = "", const int isys = -1) {
+int dio_fit(TString process = "mumem", int selection = 20, TString tag = "", const int isys = -1,
+            TString pdf_type = "auto", TString tail_model = "convolution") {
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag); //initialize normalization info
   const char* figdir = Form("figures/dio%s", (tag == "") ? "" : ("_"+tag).Data());
@@ -51,10 +52,13 @@ int dio_fit(TString process = "mumem", int selection = 20, TString tag = "", con
   convolution->Scale(h->Integral(h->FindBin(102.), h->GetNbinsX()) /
                      convolution->Integral(convolution->FindBin(102.), convolution->GetNbinsX()));
 
-  // Attempt to smooth the histogram a bit
-  const int nsmooth(0);
-  h->Smooth(nsmooth);
-  {
+  // Smooth the right tail with either convolution-derived shape or parametric tail fit.
+  const double fit_xmin = 102.0;
+  const TString smoothing_plot = Form("%s/dio_smoothing_%i%s.png", figdir, selection,
+                                      (isys > 0) ? Form("_sys_%i", isys) : "");
+  TString tail_mode = tail_model;
+  tail_mode.ToLower();
+  if(tail_mode == "convolution") {
     TCanvas c;
     h_orig->Draw("E1");
     h->Draw("E1 same");
@@ -62,49 +66,20 @@ int dio_fit(TString process = "mumem", int selection = 20, TString tag = "", con
     h_orig->SetAxisRange(xmin, xmax, "X");
     convolution->SetLineColor(kOrange);
     convolution->Draw("E1 same");
-
-    // Attempt to fit the histogram tail to further smooth it
-    const double tail_integral = h->Integral(h->FindBin(104.), h->GetNbinsX());
-    const double fit_xmin((tail_integral > 0.) ? 102.0 : 102.), fit_xmax(106.);
-
-    // First increase bin errors if it's far below its neighbors
-    for(int ibin = h->FindBin(fit_xmin); ibin <= h->FindBin(fit_xmax); ++ibin) {
-      if(ibin <= 1 || ibin >= h->GetNbinsX()) continue; // no neighbors
-      const double bine       = h->GetBinError(ibin  );
-      const double bine_left  = h->GetBinError(ibin-1);
-      const double bine_right = h->GetBinError(ibin+1);
-      if(bine_left > 0. && bine_right > 0.) {
-        if(bine < bine_left && bine < bine_right) h->SetBinError(ibin, (bine_left + bine_right)/2.); //average the bin errors
-        else if(bine < 1.e-2*bine_left) h->SetBinError(ibin, (bine_left/5.)); // suspiciously small error
-      } else if(bine_left > 0. && bine_left / bine > 100.) h->SetBinError(ibin, bine_left/2.); // if it's very low error, increase it
-    }
-
-    TF1* tail_func = new TF1("tail_func", "exp([0] + [1]*x)", fit_xmin, fit_xmax);
-    tail_func->SetParameters(473., -5.);
-    // tail_func->FixParameter(1, -4.6);
-    h->Fit(tail_func, "R");
-    tail_func->Draw("same");
-
     c.SetLogy();
-    gStyle->SetOptStat(1001111);
-    // h_orig->GetYaxis()->SetRangeUser(1.e-10, 1.e4*npot_/3.6e20);
-    c.SaveAs(Form("%s/dio_smoothing_%i%s.png", figdir, selection, (isys > 0) ? Form("_sys_%i", isys) : ""));
-
-    // // Use the fit to smooth
-    // for(int ibin = h->FindBin(fit_xmin+1.e-6); ibin <= h->FindBin(xmax-1.e-6); ++ibin) {
-    //   const float x = h->GetBinCenter(ibin);
-    //   const float val = tail_func->Eval(x);
-    //   h->SetBinContent(ibin, val);
-    //   h->SetBinError(ibin, 0.2*val); //default to 20% uncertainty on the fit result
-    // }
-
-    // Use the convolution to smooth
-    for(int ibin = h->FindBin(fit_xmin+1.e-6); ibin <= h->FindBin(xmax-1.e-6); ++ibin) {
-      const float x = h->GetBinCenter(ibin);
-      const float val = convolution->Interpolate(x) * h->GetBinWidth(ibin) / convolution->GetBinWidth(ibin);
-      h->SetBinContent(ibin, val);
-      h->SetBinError(ibin, 0.2*val); //default to 20% uncertainty on the fit result
-    }
+    c.SaveAs(smoothing_plot.Data());
+    smooth_tail_from_reference(h, convolution, fit_xmin, xmax, 0.2);
+  } else if(tail_mode != "none") {
+    smooth_right_tail(h,
+                      h_orig,
+                      smoothing_plot,
+                      tail_mode,
+                      fit_xmin,
+                      xmax,
+                      0,
+                      0.2,
+                      false,
+                      {473., -5.});
   }
 
   //----------------------------------------------
@@ -118,15 +93,21 @@ int dio_fit(TString process = "mumem", int selection = 20, TString tag = "", con
   RooDataHist data_hist(Form("%s_%i_dio_data_hist", process.Data(), selection), "DIO histogram input", obs, h);
 
   // Create the PDF
-  RooAbsPdf* pdf = (hist_pdfs_) ?
-    new RooHistPdf(Form("%s_%i_dio_pdf", process.Data(), selection), "DIO PDF", obs, data_hist) :
-    get_dio_model(obs, process, selection, true).pdf_;
+  RooAbsPdf* model_pdf = get_dio_model(obs, process, selection, true).pdf_;
+  RooAbsPdf* pdf = choose_pdf_model(pdf_type,
+                                    hist_pdfs_,
+                                    obs,
+                                    data_hist,
+                                    model_pdf,
+                                    Form("%s_%i_dio_pdf", process.Data(), selection),
+                                    "DIO PDF",
+                                    h);
 
 
   //----------------------------------------------
   // Perform the fit
 
-  if(!hist_pdfs_) pdf->fitTo(data_hist, RooFit::SumW2Error(true));
+  if(run_component_fit(pdf, data_hist, pdf_type, hist_pdfs_)) return 20;
 
   // Plot the underlying PDFs if convolving
   if(pdf->InheritsFrom("RooFFTConvPdf") || pdf->InheritsFrom("RooNumConvPdf")) {

@@ -8,7 +8,7 @@
 #include "fit_workspace_utils.C"
 #include "../physics.C"
 
-int pbar_fit(TString process = "mumem", int selection = 20, TString tag = "") {
+int pbar_fit(TString process = "mumem", int selection = 20, TString tag = "", TString pdf_type = "auto") {
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag); //initialize normalization info
   const char* figdir = Form("figures/pbar%s", (tag == "") ? "" : ("_"+tag).Data());
@@ -41,12 +41,20 @@ int pbar_fit(TString process = "mumem", int selection = 20, TString tag = "") {
   RooDataHist data_hist("pbar_data_hist", "Antiproton input", obs, h);
 
   // Create the PDF
-  RooAbsPdf* pdf = get_pbar_model(obs, process, selection, false).pdf_;
+  RooAbsPdf* model_pdf = get_pbar_model(obs, process, selection, false).pdf_;
+  RooAbsPdf* pdf = choose_pdf_model(pdf_type,
+                                    hist_pdfs_,
+                                    obs,
+                                    data_hist,
+                                    model_pdf,
+                                    Form("%s_%i_pbar_pdf", process.Data(), selection),
+                                    "Antiproton background",
+                                    h);
 
   //----------------------------------------------
   // Perform the fit
 
-  pdf->fitTo(data_hist, RooFit::SumW2Error(true));
+  if(run_component_fit(pdf, data_hist, pdf_type, hist_pdfs_)) return 20;
 
 
   //----------------------------------------------

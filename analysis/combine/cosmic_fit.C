@@ -11,7 +11,7 @@
 bool use_control_region_ = false; // whether or not to take the distribution from the CRV tagged region
 bool fit_total_          = true ; // fit the combined veto + signal regions to get more stable results
 
-int cosmic_fit(TString process = "mumem", int selection = 20, TString tag = "", const int isys = -1) {
+int cosmic_fit(TString process = "mumem", int selection = 20, TString tag = "", const int isys = -1, TString pdf_type = "auto") {
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag); //initialize normalization info
   const char* figdir = Form("figures/cosmic%s", (tag == "") ? "" : ("_"+tag).Data());
@@ -50,18 +50,23 @@ int cosmic_fit(TString process = "mumem", int selection = 20, TString tag = "", 
   RooDataHist data_tot_hist ("cosmic_tot_data_hist" , "Cosmic input (total)"        , obs, h_total);
 
   // Create the PDF
-  RooAbsPdf* pdf = get_cosmic_model(obs, process, selection, false).pdf_;
+  RooAbsPdf* model_pdf = get_cosmic_model(obs, process, selection, false).pdf_;
+  RooAbsPdf* pdf = choose_pdf_model(pdf_type,
+                                    hist_pdfs_,
+                                    obs,
+                                    data_sig_hist,
+                                    model_pdf,
+                                    Form("%s_%i_cosmic_pdf", process.Data(), selection),
+                                    "Cosmic background",
+                                    h_sig_region);
 
   //----------------------------------------------
   // Perform the fit without the veto for the shape
 
-  if(fit_total_) {
-    pdf->fitTo(data_tot_hist , RooFit::SumW2Error(true));
-  } else if(use_control_region_) {
-    pdf->fitTo(data_veto_hist, RooFit::SumW2Error(true));
-  } else {
-    pdf->fitTo(data_sig_hist , RooFit::SumW2Error(true));
-  }
+  RooDataHist* fit_data = &data_sig_hist;
+  if(fit_total_)            fit_data = &data_tot_hist;
+  else if(use_control_region_) fit_data = &data_veto_hist;
+  if(run_component_fit(pdf, *fit_data, pdf_type, hist_pdfs_)) return 20;
 
   //----------------------------------------------
   // Evaluate the predicted rate
