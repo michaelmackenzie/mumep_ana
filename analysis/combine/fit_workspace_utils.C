@@ -4,10 +4,64 @@
 
 #include "../tools/utilities.C"
 
+int enforce_uniform_if_sparse(TH1* h,
+                              RooRealVar& obs,
+                              RooAbsPdf*& pdf,
+                              const TString pdf_name,
+                              const TString pdf_title,
+                              const double min_filled_fraction = 0.75);
+
 TString normalize_pdf_type(TString pdf_type) {
   pdf_type.ToLower();
   pdf_type.ReplaceAll(" ", "");
   return pdf_type;
+}
+
+TString default_pdf_type_for_component(const TString& component) {
+  TString c = component;
+  c.ToLower();
+  if(c == "signal")  return "auto";
+  if(c == "dio")     return "auto";
+  if(c == "cosmic")  return "auto";
+  if(c == "rpc_ext") return "auto";
+  if(c == "rpc_int") return "auto";
+  if(c == "pbar")    return "auto";
+  if(c == "rmc_ext") return "auto";
+  if(c == "rmc_int") return "auto";
+  return "auto";
+}
+
+TString default_tail_model_for_component(const TString& component) {
+  TString c = component;
+  c.ToLower();
+  if(c == "signal")  return "exp";
+  if(c == "dio")     return "convolution";
+  if(c == "rmc_ext") return "exp";
+  if(c == "rmc_int") return "exp";
+  return "none";
+}
+
+TString resolve_pdf_type(const TString& component, TString requested_pdf_type) {
+  requested_pdf_type = normalize_pdf_type(requested_pdf_type);
+  if(requested_pdf_type == "" || requested_pdf_type == "default") {
+    return default_pdf_type_for_component(component);
+  }
+  return requested_pdf_type;
+}
+
+TString resolve_tail_model(const TString& component, TString requested_tail_model) {
+  requested_tail_model = normalize_pdf_type(requested_tail_model);
+  if(requested_tail_model == "" || requested_tail_model == "default") {
+    return default_tail_model_for_component(component);
+  }
+  return requested_tail_model;
+}
+
+std::vector<int> default_control_region_sets(const TString& component, const int selection) {
+  TString c = component;
+  c.ToLower();
+  if(c == "cosmic") return {selection + 1000};
+  return {};
 }
 
 int parse_poly_degree(const TString& pdf_type, const int default_degree = 1) {

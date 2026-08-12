@@ -91,7 +91,7 @@ RooProdPdf* build_full_model(
   components.push_back("cosmic");
   components.push_back("rpc_ext");
   components.push_back("rpc_int");
-  components.push_back("pbar");
+  if(!use_evtana_) components.push_back("pbar");
   if(!is_mumem) {
     components.push_back("rmc_ext");
     components.push_back("rmc_int");
@@ -375,7 +375,8 @@ RooProdPdf* build_full_model(
 //---------------------------------------------------------------------------
 double total_background(RooWorkspace* ws, const TString process, const int selection) {
   const bool is_mumem = (process == "mumem");
-  std::vector<TString> bkg_comps = {"cosmic","rpc_ext","rpc_int","pbar"};
+  std::vector<TString> bkg_comps = {"cosmic","rpc_ext","rpc_int"};
+  if(!use_evtana_) bkg_comps.push_back("pbar");
   if(is_mumem) bkg_comps.insert(bkg_comps.begin(), "dio");
   else { bkg_comps.push_back("rmc_ext"); bkg_comps.push_back("rmc_int"); }
   double total = 0.;

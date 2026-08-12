@@ -300,7 +300,8 @@ TCanvas* make_ratio_plot(Plot_t plot) {
 
 //------------------------------------------------------------------------------------------------------------
 TCanvas* plot_fit_frame(RooPlot* frame, RooRealVar& obs, TString xtitle, TString ytitle, TString data, TString pdf,
-                        const double npot = 3.6e20, const double livetime = 3.e7, const double nmuons = 6e17) {
+                        const double npot = 3.6e20, const double livetime = 3.e7, const double nmuons = 6e17,
+                        const bool fractional_deviation = false) {
   if(!frame) return nullptr;
   TGaxis::SetExponentOffset(-0.05, 0.01, "Y"); // ensure the exponent doesn't hit label info
 
@@ -331,19 +332,60 @@ TCanvas* plot_fit_frame(RooPlot* frame, RooRealVar& obs, TString xtitle, TString
   pad2->cd();
   auto lower_frame = obs.frame();
 
-  auto hpull = frame->pullHist(data.Data(), pdf.Data());
-  if(hpull) {
-    hpull->SetName("ratio_fnc");
-    // hpull->SetLineColor(kBlack);
-    // hpull->SetLineWidth(2);
-    // hpull->SetMarkerStyle(20);
-    // hpull->SetMarkerSize(0.8);
-    lower_frame->addPlotable(hpull,"PE1");
+  double ylo = -3.9;
+  double yhi =  3.9;
+  TString yaxis_title = "#frac{N_{data} - N_{fit}}{#sigma_{data}}";
+
+  if(fractional_deviation) {
+    auto hdata = frame->getHist(data.Data());
+    auto cpdf = frame->getCurve(pdf.Data());
+    if(hdata && cpdf) {
+      const int n = hdata->GetN();
+      std::vector<double> xs(n), ys(n), exl(n), exh(n), eyl(n), eyh(n);
+      for(int ip = 0; ip < n; ++ip) {
+        double x(0.), y(0.);
+        hdata->GetPoint(ip, x, y);
+        const double model = cpdf->Eval(x);
+        const double denom = std::abs(model);
+        double frac(0.), err_lo(0.), err_hi(0.);
+        if(denom > 0.) {
+          frac = (y - model) / model;
+          err_lo = hdata->GetErrorYlow(ip) / denom;
+          err_hi = hdata->GetErrorYhigh(ip) / denom;
+        }
+        xs[ip] = x;
+        ys[ip] = frac;
+        exl[ip] = hdata->GetErrorXlow(ip);
+        exh[ip] = hdata->GetErrorXhigh(ip);
+        eyl[ip] = err_lo;
+        eyh[ip] = err_hi;
+      }
+
+      auto gfrac = new TGraphAsymmErrors(n, xs.data(), ys.data(), exl.data(), exh.data(), eyl.data(), eyh.data());
+      gfrac->SetName("ratio_fnc");
+      gfrac->SetLineColor(kBlack);
+      gfrac->SetMarkerColor(kBlack);
+      gfrac->SetMarkerStyle(20);
+      gfrac->SetMarkerSize(0.8);
+      lower_frame->addObject(gfrac, "PE");
+      ylo = -0.21;
+      yhi =  0.21;
+      yaxis_title = "#frac{N_{data} - N_{fit}}{N_{fit}}";
+    } else {
+      cout << __func__ << ": No data/pdf objects found for fractional deviation with data = "
+           << data.Data() << " pdf = " << pdf.Data() << endl;
+    }
   } else {
-    cout << __func__ << ": No pull histogram found with data = " << data.Data() << " pdf = " << pdf.Data() << endl;
+    auto hpull = frame->pullHist(data.Data(), pdf.Data());
+    if(hpull) {
+      hpull->SetName("ratio_fnc");
+      lower_frame->addPlotable(hpull,"PE1");
+    } else {
+      cout << __func__ << ": No pull histogram found with data = " << data.Data() << " pdf = " << pdf.Data() << endl;
+    }
   }
 
-  lower_frame->GetYaxis()->SetRangeUser(-3.9,3.9);
+  lower_frame->GetYaxis()->SetRangeUser(ylo, yhi);
   lower_frame->GetYaxis()->SetNdivisions(5);
   lower_frame->GetYaxis()->SetLabelSize(0.125);
   lower_frame->GetYaxis()->SetLabelOffset(0.01);
@@ -354,7 +396,7 @@ TCanvas* plot_fit_frame(RooPlot* frame, RooRealVar& obs, TString xtitle, TString
   lower_frame->GetXaxis()->SetTitleSize(0.2);
   lower_frame->GetXaxis()->SetTitleOffset(0.8);
   lower_frame->SetTitle("");
-  lower_frame->GetYaxis()->SetTitle("#frac{N_{data} - N_{fit}}{#sigma_{data}}");
+  lower_frame->GetYaxis()->SetTitle(yaxis_title.Data());
   lower_frame->GetXaxis()->SetTitle(xtitle.Data());
   lower_frame->Draw();
 

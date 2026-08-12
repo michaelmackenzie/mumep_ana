@@ -6,7 +6,7 @@
 #include "signal_fit.C"
 
 // Systematic information
-ConvAna::Systematics fSystematics;
+mumep_ana::Systematics fSystematics;
 
 int systematics(TString process = "mumem", int selection = 20, TString tag = "", TString sys = "") {
   if(use_evtana_) set_evtana_defaults();

@@ -6,61 +6,12 @@
 #include "../physics.C"
 #include "../datasets.C"
 #include "../tools/utilities.C"
+#include "model_io_utils.C"
 #include "RooTFnBinding.h"
 
 //---------------------------------------------------------------------------------------------------------------------------
 TH1* get_signal_hist(const TString process, const int selection, const TString name = "signal", const int isys = -1) {
-  auto info = get_dataset_info(process);
-  const bool is_mumem = process == "mumem";
-
-  // Retrieve the input file
-  TFile* f = TFile::Open(Form("%sConvAna.%s.%s.m%i.%s", hist_path_, hist_func_, info.name_.Data(), hist_mode_, file_type_.Data()), "READ");
-  if(!f) return nullptr;
-
-  // Retrieve the input histogram
-  TString hist_name = (isys < 0) ? Form("%sHist/trk_%i/%s", dir_path_.Data(), selection, var_.Data()) : Form("%sHist/sys_%i/%s_%i", dir_path_.Data(), selection, var_.Data(), isys);
-  TH1* h = (TH1*) f->Get(hist_name.Data());
-  if(!h) {
-    cout << __func__ << ": Input histogram for selection " << selection << " not found in file " << f->GetName()
-         << ": Hist name = " << hist_name.Data() << endl;
-    f->Close();
-    return nullptr;
-  }
-  h = (TH1*) h->Clone(Form("%s_%i_%s%s", process.Data(), selection, name.Data(), (isys < 0) ? "" : Form("_sys_%i", isys)));
-  h->SetDirectory(0);
-  const int rebin = bin_width_ / h->GetBinWidth(1) + 1.e-3;
-  if(rebin > 1) h->Rebin(rebin);
-
-  // check the process N(event) counts
-  TTree* t_norm = (TTree*) f->Get(Form("%sdata/Norm", dir_path_.Data()));
-  if(!t_norm) cout << __func__ << ": Normalization tree for process " << process.Data() << " not found\n";
-  else {
-    Long64_t nseen(0), ntotal(0);
-    t_norm->SetBranchAddress("nseen", &nseen);
-    for(Long64_t entry = 0; entry < t_norm->GetEntries(); ++entry) {
-      t_norm->GetEntry(entry);
-      cout << "N(seen) = " << nseen << " N(total) = " << ntotal << endl;
-      ntotal += nseen;
-    }
-    if(ntotal == 0) {
-      cout << __func__ << ": No normalization contained in the normalization tree for process " << process.Data() << endl;
-    } else {
-      Long64_t nexpect = info.ndigi_;
-      if(nexpect == 0) {
-        cout << __func__ << ": No estimate for the number of expected events for process " << process.Data() << endl;
-      } else {
-        if(nexpect != ntotal) {
-          const double ratio = nexpect * 1. / ntotal;
-          cout << __func__ << ": See " << ntotal << " events but expect " << nexpect << " for process " << process.Data()
-               << " --> scaling by " << ratio << endl;
-          h->Scale(ratio);
-        }
-      }
-    }
-  }
-
-  f->Close();
-  return h;
+  return load_component_hist_from_dataset(process, selection, name, isys, var_);
 }
 
 //---------------------------------------------------------------------------------------------------------------------------
@@ -92,8 +43,8 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
   if(!use_hist) {
     delete h; //no longer needed
 
-    const int fit_version = 0; // 0: CB + Landau; 1: Landau CB
-    const float signal_peak = (is_mumem) ? 105.0f : 92.3f;
+    const int fit_version = 2; // 0: CB * Landau; 1: Landau CB; 2: CB
+    const float signal_peak = (is_mumem) ? 104.0f : 92.3f;
 
     if(fit_version == 0) { // convolve double-sided crysal ball with energy losses
 
@@ -111,7 +62,7 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
       RooRealVar* res_alpha1   = new RooRealVar(Form("%s_res_alpha1", name), "alpha1", 1., 0.1, 10.);
       RooRealVar* res_alpha2   = new RooRealVar(Form("%s_res_alpha2", name), "alpha2", 1., 0.1, 10.);
       RooRealVar* res_n1       = new RooRealVar(Form("%s_res_n1"    , name), "enne1", 5., 0.1, 30.);
-      RooRealVar* res_n2       = new RooRealVar(Form("%s_res_n2"    , name), "enne2", 5., 0.1, 30.);
+      RooRealVar* res_n2       = new RooRealVar(Form("%s_res_n2"    , name), "enne2", 5., 5., 30.);
       // RooFormulaVar* mean_func = new RooFormulaVar(Form("%s_mean_func", name), "mean with offset",
       //                                              "@0*(1 + @1*@2 + @3*@4)", RooArgList(*mean, *elec_ES_shift, *elec_ES_size, *muon_ES_shift, *muon_ES_size));
       RooAbsPdf* res_pdf       = new RooCrystalBall(Form("%s_res_pdf"  , name), "signal resolution PDF", obs, *res_mean, *res_sigma, *res_alpha1, *res_n1, *res_alpha2, *res_n2);
@@ -123,16 +74,14 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
       ((RooFFTConvPdf*) pdf)->setBufferStrategy(RooFFTConvPdf::Extend); //Extend, Flat, or Mirror
 
       if(is_mumem) {
-        if(selection == 20) {
-          sig_mean  ->setVal(-104.168 ); // +/- 0.0030234
-          sig_sigma ->setVal(0.190398 ); // +/- 0.000811216
-          res_alpha1->setVal(0.110681 ); // +/- 0.00466586
-          res_alpha2->setVal(0.353623 ); // +/- 0.0101467
-          res_mean  ->setVal(0.359745 ); // +/- 0.00294892
-          res_n1    ->setVal(14.035   ); // +/- 4.40835
-          res_n2    ->setVal(3.75875  ); // +/- 0.0546084
-          res_sigma ->setVal(0.0147911); // +/- 0.000412189
-        }
+        sig_mean  ->setVal(-104.167 );
+        sig_sigma ->setVal(0.205701 );
+        res_alpha1->setVal(0.104305 );
+        res_alpha2->setVal(0.353623 );
+        res_mean  ->setVal(0.360386 );
+        res_n1    ->setVal(3. );
+        res_n2    ->setVal(10.  );
+        res_sigma ->setVal(0.0147911);
       } else {
         if(selection == 40) {
           sig_mean  ->setVal( -91.4263 ); // +/- 0.0241985
@@ -194,6 +143,22 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
     //   sig_alpha2 ->setConstant(freeze);
     //   sig_n1     ->setConstant(freeze);
     //   sig_n2     ->setConstant(freeze);
+    } else if(fit_version == 2) { // Double-sided Crystal Ball
+
+      RooRealVar* sig_mean     = new RooRealVar(Form("%s_sig_mean"  , name), "mean", signal_peak, signal_peak - 5., signal_peak + 5.);
+      RooRealVar* sig_sigma    = new RooRealVar(Form("%s_sig_sigma" , name), "sigma", 1., 0., 5.);
+      RooRealVar* sig_alpha1   = new RooRealVar(Form("%s_sig_alpha1", name), "alpha1", 1., 0.1, 10.);
+      RooRealVar* sig_alpha2   = new RooRealVar(Form("%s_sig_alpha2", name), "alpha2", 1., 0.1, 10.);
+      RooRealVar* sig_n1       = new RooRealVar(Form("%s_sig_n1"    , name), "enne1", 2., 0.1, 30.);
+      RooRealVar* sig_n2       = new RooRealVar(Form("%s_sig_n2"    , name), "enne2", 5., 0.1, 30.);
+      pdf       = new RooCrystalBall(Form("%s_sig_pdf"  , name), "Signal PDF", obs, *sig_mean, *sig_sigma, *sig_alpha1, *sig_n1, *sig_alpha2, *sig_n2);
+
+      sig_mean   ->setConstant(freeze);
+      sig_sigma  ->setConstant(freeze);
+      sig_alpha1 ->setConstant(freeze);
+      sig_alpha2 ->setConstant(freeze);
+      sig_n1     ->setConstant(freeze);
+      sig_n2     ->setConstant(freeze);
     }
   } else { //Use a histogram-based PDF
     auto signal_hist = new RooDataHist(Form("%s_data", name), "Signal Data", obs, h);

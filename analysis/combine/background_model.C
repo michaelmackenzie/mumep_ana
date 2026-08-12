@@ -5,67 +5,35 @@
 #include "../defaults.C"
 #include "../datasets.C"
 #include "../physics.C"
+#include "model_io_utils.C"
 #include "RooStitchedPdf.cxx"
 #include "../tools/utilities.C"
 
+TString data_dataset_key_from_tag(TString tag) {
+  tag.ToLower();
+  if(tag.Contains("mds1d")) return "data_mds1d";
+  if(tag.Contains("mds1f")) return "data_mds1f";
+  if(tag.Contains("mds1g")) return "data_mds1g";
+  if(tag.Contains("mds2a")) return "data_mds2a";
+  if(tag.Contains("mds2b")) return "data_mds2b";
+  if(tag.Contains("mds2c")) return "data_mds2c";
+  if(tag.Contains("mds3c")) return "data_mds3c";
+  return "";
+}
+
 //---------------------------------------------------------------------------------------------------------------------------
 TH1* get_data_hist(const TString process, const int selection, TString tag = "") {
-  tag.ToLower();
-
-  // Retrieve the input file
-  TFile* f = nullptr;
-  if(tag.Contains("mds1d")) {
-    f = TFile::Open(Form("%sConvAna.%s.mds1db0s5r0000.m%i.%s", hist_path_, hist_func_, hist_mode_, file_type_.Data()), "READ");
-  }
-  if(tag.Contains("mds1f")) {
-    f = TFile::Open(Form("%sConvAna.%s.mds1fb1s5r0000.m%i.%s", hist_path_, hist_func_, hist_mode_, file_type_.Data()), "READ");
-  }
-  if(tag.Contains("mds1g")) {
-    f = TFile::Open(Form("%sConvAna.%s.mds1gb0s5r0000.m%i.%s", hist_path_, hist_func_, hist_mode_, file_type_.Data()), "READ");
-  }
-  if(!f) return nullptr;
-
-  // Retrieve the input histogram
-  TString hist_name = Form("%sHist/trk_%i/%s", dir_path_.Data(), selection, var_.Data());
-  TH1* h = (TH1*) f->Get(hist_name.Data());
-  if(!h) {
-    cout << __func__ << ": Input histogram for selection " << selection << " not found in file " << f->GetName()
-         << ": Hist name = " << hist_name.Data() << endl;
-    f->Close();
+  const TString key = data_dataset_key_from_tag(tag);
+  if(key == "") {
+    cout << __func__ << ": No data dataset key mapped for tag " << tag.Data() << endl;
     return nullptr;
   }
-  h = (TH1*) h->Clone(Form("%s_%i_data%s", process.Data(), selection, tag.Data()));
-  h->SetDirectory(0);
-  if(bin_width_ > 0.) h->Rebin(bin_width_ / h->GetBinWidth(1) + 1.e-3);
-
-  // check the process N(event) counts
-  TTree* t_norm = (TTree*) f->Get(Form("%sdata/Norm", dir_path_.Data()));
-  if(!t_norm) cout << __func__ << ": Normalization tree for process " << process.Data() << " not found\n";
-  else {
-    Long64_t nseen(0), ntotal(0);
-    t_norm->SetBranchAddress("nseen", &nseen);
-    for(Long64_t entry = 0; entry < t_norm->GetEntries(); ++entry) {
-      t_norm->GetEntry(entry);
-      ntotal += nseen;
-    }
-    if(ntotal == 0) cout << __func__ << ": No normalization contained in the normalization tree for process " << process.Data() << endl;
-    else {
-      // FIXME: Add Data names and count checks
-      // Long64_t nexpect = datasets_["data"].ndigi_;
-      // if(nexpect == 0) cout << __func__ << ": No estimate for the number of expected events for process " << process.Data() << endl;
-      // else {
-      //   if(nexpect != ntotal) {
-      //     const double ratio = nexpect * 1. / ntotal;
-      //     cout << __func__ << ": See " << ntotal << " events but expect " << nexpect << " for process " << process.Data()
-      //          << " --> scaling by " << ratio << endl;
-      //     h->Scale(ratio);
-      //   }
-      // }
-    }
-  }
-
-
-  f->Close();
+  TH1* h = load_component_hist_from_dataset(key,
+                                            selection,
+                                            Form("%s_data%s", process.Data(), tag.Data()),
+                                            -1,
+                                            var_,
+                                            false);
   return h;
 }
 
@@ -82,56 +50,16 @@ RooDataHist* get_data(RooRealVar& obs, const TString process, const int selectio
 
 //---------------------------------------------------------------------------------------------------------------------------
 TH1* get_background_hist(const TString process, const int selection, const TString name = "bkg", const int isys = -1, TString var_name = var_) {
-  auto info = get_dataset_info(process);
-  if(info.name_ == "") return nullptr;
+  return load_component_hist_from_dataset(process, selection, name, isys, var_name);
+}
 
-  // Retrieve the input file
-  TFile* f = TFile::Open(Form("%sConvAna.%s.%s.m%i.%s", hist_path_, hist_func_, info.name_.Data(), hist_mode_, file_type_.Data()), "READ");
-  if(!f) return nullptr;
-
-  // Retrieve the input histogram
-  // FIXME: Make the observable variable configurable
-  TString hist_name = (isys < 0) ? Form("%sHist/trk_%i/%s", dir_path_.Data(), selection, var_name.Data()) : Form("%sHist/sys_%i/%s_%i", dir_path_.Data(), selection, var_name.Data(), isys);
-  TH1* h = (TH1*) f->Get(hist_name.Data());
-  if(!h) {
-    cout << __func__ << ": Input histogram for selection " << selection << " not found in file " << f->GetName()
-         << ": Hist name = " << hist_name.Data() << endl;
-    f->Close();
-    return nullptr;
-  }
-  h = (TH1*) h->Clone(Form("%s_%i_%s%s", process.Data(), selection, name.Data(), (isys < 0) ? "" : Form("_sys_%i", isys)));
-  h->SetDirectory(0);
-  const int rebin = bin_width_ / h->GetBinWidth(1) + 1.e-3;
-  if(rebin > 1) h->Rebin(rebin);
-
-  // check the process N(event) counts
-  TTree* t_norm = (TTree*) f->Get(Form("%sdata/Norm", dir_path_.Data()));
-  if(!t_norm) cout << __func__ << ": Normalization tree for process " << process.Data() << " not found\n";
-  else {
-    Long64_t nseen(0), ntotal(0);
-    t_norm->SetBranchAddress("nseen", &nseen);
-    for(Long64_t entry = 0; entry < t_norm->GetEntries(); ++entry) {
-      t_norm->GetEntry(entry);
-      ntotal += nseen;
-    }
-    if(ntotal == 0) cout << __func__ << ": No normalization contained in the normalization tree for process " << process.Data() << endl;
-    else {
-      Long64_t nexpect = datasets_[process].ndigi_;
-      if(nexpect == 0) cout << __func__ << ": No estimate for the number of expected events for process " << process.Data() << endl;
-      else {
-        if(nexpect != ntotal) {
-          const double ratio = nexpect * 1. / ntotal;
-          cout << __func__ << ": See " << ntotal << " events but expect " << nexpect << " for process " << process.Data()
-               << " --> scaling by " << ratio << endl;
-          h->Scale(ratio);
-        }
-      }
-    }
-  }
-
-
-  f->Close();
-  return h;
+//---------------------------------------------------------------------------------------------------------------------------
+TH1* get_background_hist_multi(const TString process,
+                               const std::vector<int>& selections,
+                               const TString name = "bkg",
+                               const int isys = -1,
+                               TString var_name = var_) {
+  return load_component_hist_from_sets(process, selections, name, isys, var_name);
 }
 
 //---------------------------------------------------------------------------------------------------------------------------

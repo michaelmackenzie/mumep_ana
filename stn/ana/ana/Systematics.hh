@@ -12,7 +12,7 @@
 #include "TString.h"
 
 // local includes
-#include "mumep_ana/stn/ana/SysHist_t.hh"
+#include "mumep_ana/stn/ana/ana/SysHist_t.hh"
 
 namespace mumep_ana {
   class Systematics {

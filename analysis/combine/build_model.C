@@ -197,7 +197,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   map<TString,map<TString, bool>> sys_map;
   if(include_sys_) {
     // Shape-based uncertainties
-    for(int isys = 1; isys < ConvAna::kMaxSystematics; ++isys) {
+    for(int isys = 1; isys < mumep_ana::kMaxSystematics; ++isys) {
       TString sys_name = fSystematics.GetName(isys);
       if(sys_name == "") continue;
       const bool is_up = fSystematics.IsUp(isys);

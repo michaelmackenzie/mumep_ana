@@ -13,11 +13,17 @@ Help() {
     echo "      --skip-model             Skip model-building stage"
     echo "      --skip-cards             Skip datacard merge stage"
     echo "      --skip-combine           Skip combine execution stage"
+    echo "      --no-sys                 Skip fitting systematics"
     echo "      --evt-ana                Assume Mu2eEvtAna processing"
     echo "  -h, --help                   Show this help"
     echo ""
+    echo "Environment fit controls forwarded to perform_fits.sh:"
+    echo "  FIT_PDF_TYPE, FIT_TAIL_MODEL, FIT_SHAPE_SETS, FIT_CONTROL_SETS"
+    echo "  FIT_PDF_TYPE_<COMP>, FIT_TAIL_MODEL_<COMP>, FIT_SHAPE_SETS_<COMP>, FIT_CONTROL_SETS_<COMP>"
+    echo "    Components: SIGNAL DIO COSMIC RPC_EXT RPC_INT PBAR RMC_EXT RMC_INT"
+    echo ""
     echo "Backward-compatible positional mode is still supported:"
-    echo "  ./full_loop.sh <process> <selection list> <tag> <skip fits> <skip model> <skip cards> <skip combine>"
+    echo "  ./full_loop.sh <process> <selection list> <tag> <skip fits> <skip model> <skip cards> <skip combine> <no sys>"
 }
 
 PROCESS=""
@@ -27,6 +33,7 @@ SKIPFITS=""
 SKIPMODEL=""
 SKIPCARDS=""
 SKIPCOMBINE=""
+NOSYS=""
 EVTANA=""
 
 # Parse flags first. If no leading flag is found, fall back to legacy positional args.
@@ -65,6 +72,10 @@ if [[ $# -gt 0 ]] && [[ "${1}" == -* ]]; then
                 SKIPCOMBINE="1"
                 shift
                 ;;
+            --no-sys)
+                NOSYS="1"
+                shift
+                ;;
             --evt-ana)
                 EVTANA="1"
                 shift
@@ -88,6 +99,7 @@ else
     SKIPMODEL=${5:-}
     SKIPCARDS=${6:-}
     SKIPCOMBINE=${7:-}
+    NOSYS=${8:-}
 fi
 
 if [[ "${PROCESS}" == "" ]]; then
@@ -102,7 +114,17 @@ declare -a MERGELIST=()
 declare -a MERGELISTCC=()
 for SELECTION in ${SELECTIONS}; do
     if [[ "${SKIPFITS}" == "" ]]; then
-        ./perform_fits.sh "${PROCESS}" "${SELECTION}" "${TAG}" "${EVTANA}"
+        [[ "${FIT_PDF_TYPE:-}" != "" ]] && export FIT_PDF_TYPE
+        [[ "${FIT_TAIL_MODEL:-}" != "" ]] && export FIT_TAIL_MODEL
+        [[ "${FIT_SHAPE_SETS:-}" != "" ]] && export FIT_SHAPE_SETS
+        [[ "${FIT_CONTROL_SETS:-}" != "" ]] && export FIT_CONTROL_SETS
+        for comp in SIGNAL DIO COSMIC RPC_EXT RPC_INT PBAR RMC_EXT RMC_INT; do
+            var="FIT_PDF_TYPE_${comp}";      [[ "${!var:-}" != "" ]] && export "$var"
+            var="FIT_TAIL_MODEL_${comp}";    [[ "${!var:-}" != "" ]] && export "$var"
+            var="FIT_SHAPE_SETS_${comp}";    [[ "${!var:-}" != "" ]] && export "$var"
+            var="FIT_CONTROL_SETS_${comp}";  [[ "${!var:-}" != "" ]] && export "$var"
+        done
+        ./perform_fits.sh "${PROCESS}" "${SELECTION}" "${TAG}" "${EVTANA}" "${NOSYS}"
     fi
     if [[ "${SKIPMODEL}" == "" ]]; then
         root.exe -q -b "build_model.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\")"
