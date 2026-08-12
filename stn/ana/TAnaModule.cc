@@ -16,12 +16,12 @@
 //------------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------
-#include "ConvAna/ana/TAnaModule.hh"
-ClassImp(ConvAna::TAnaModule)
+#include "mumep_ana/stn/ana/TAnaModule.hh"
+ClassImp(mumep_ana::TAnaModule)
 
     using std::vector;
 
-namespace ConvAna {
+namespace mumep_ana {
 
   //-----------------------------------------------------------------------------
   TAnaModule::TAnaModule(const char* name, const char* title) : TStnModule(name, title) {
@@ -739,7 +739,7 @@ namespace ConvAna {
   }
 
   //-----------------------------------------------------------------------------
-  void TAnaModule::FillClusterHistograms(ConvAna::ClusterHist_t* Hist, ConvAna::ClusterPar_t* Par, float Weight) {
+  void TAnaModule::FillClusterHistograms(mumep_ana::ClusterHist_t* Hist, mumep_ana::ClusterPar_t* Par, float Weight) {
     if(!Par)
       return;
     TStnCluster* Cluster = Par->fCluster;
@@ -815,7 +815,7 @@ namespace ConvAna {
   }
 
   //-----------------------------------------------------------------------------
-  void TAnaModule::FillCRVClusterHistograms(ConvAna::CRVClusterHist_t* Hist, ConvAna::CRVStubPar_t* CrvStubPar, float Weight) {
+  void TAnaModule::FillCRVClusterHistograms(mumep_ana::CRVClusterHist_t* Hist, mumep_ana::CRVStubPar_t* CrvStubPar, float Weight) {
     if(!Hist)
       throw std::runtime_error(Form("TAnaModule::%s: Histogram set undefined!", __func__));
     if(!CrvStubPar)
@@ -865,7 +865,7 @@ namespace ConvAna {
 
   void TAnaModule::InitEventInfo() { SetTriggersPassed(); }
 
-  void TAnaModule::InitTrackPar(TStnTrack* Trk, ConvAna::TrackPar_t* TrkPar, TStnHelix* Hlx) {
+  void TAnaModule::InitTrackPar(TStnTrack* Trk, mumep_ana::TrackPar_t* TrkPar, TStnHelix* Hlx) {
     TrkPar->fCluster = nullptr;
 
     // clear track selection flags
@@ -916,7 +916,7 @@ namespace ConvAna {
   }
 
   //-----------------------------------------------------------------------------
-  void TAnaModule::InitHelixPar(TStnHelix* Hlx, ConvAna::HelixPar_t* HlxPar) {
+  void TAnaModule::InitHelixPar(TStnHelix* Hlx, mumep_ana::HelixPar_t* HlxPar) {
 
     // set pointer to TStnTrack
     HlxPar->fHelix = Hlx;
@@ -932,7 +932,7 @@ namespace ConvAna {
   }
 
   //-----------------------------------------------------------------------------
-  void TAnaModule::InitClusterPar(TStnCluster* Cluster, ConvAna::ClusterPar_t* ClusterPar) {
+  void TAnaModule::InitClusterPar(TStnCluster* Cluster, mumep_ana::ClusterPar_t* ClusterPar) {
     if(!ClusterPar)
       return;
     ClusterPar->init(Cluster);
@@ -942,7 +942,7 @@ namespace ConvAna {
   }
 
   //-----------------------------------------------------------------------------
-  void TAnaModule::InitCRVStubPar(TCrvClusterBlock* CrvClusterBlock, ConvAna::CRVStubPar_t* CrvStubPar, int maxStubs, TSimParticle* Simp) {
+  void TAnaModule::InitCRVStubPar(TCrvClusterBlock* CrvClusterBlock, mumep_ana::CRVStubPar_t* CrvStubPar, int maxStubs, TSimParticle* Simp) {
     if(!CrvClusterBlock || !CrvStubPar) {
       if(fDebugLevel > 0)
         printf("TAnaModule::%s: Block/Par not defined, exiting\n", __func__);
@@ -959,7 +959,7 @@ namespace ConvAna {
       TCrvCoincidenceCluster* crv_stub = CrvClusterBlock->Cluster(is);
       if(fDebugLevel > 2)
         printf(" Retrieved the CRV cluster\n");
-      ConvAna::CRVStubPar_t& sp = CrvStubPar[is];
+      mumep_ana::CRVStubPar_t& sp = CrvStubPar[is];
       sp.reset();
       if(!crv_stub) {
         printf(
@@ -1040,8 +1040,8 @@ namespace ConvAna {
   }
 
   //_____________________________________________________________________________
-  ConvAna::CRVStubPar_t* TAnaModule::MatchCRVToTrack(TStnTrack* track, TCrvClusterBlock* clusters, ConvAna::CRVStubPar_t* stubPars, int maxStubs) {
-    ConvAna::CRVStubPar_t* match(nullptr);
+  mumep_ana::CRVStubPar_t* TAnaModule::MatchCRVToTrack(TStnTrack* track, TCrvClusterBlock* clusters, mumep_ana::CRVStubPar_t* stubPars, int maxStubs) {
+    mumep_ana::CRVStubPar_t* match(nullptr);
     if(!clusters || !stubPars || !track)
       return match;
     float match_t_cl(0.f), match_t_tk(0.f);
@@ -1170,9 +1170,9 @@ namespace ConvAna {
     }
 
     if(trk_veto_de > 0)
-      VetoID |= ConvAna::kNTrkDeVetoBit;
+      VetoID |= mumep_ana::kNTrkDeVetoBit;
     if(trk_veto_ue > 0)
-      VetoID |= ConvAna::kNTrkUeVetoBit;
+      VetoID |= mumep_ana::kNTrkUeVetoBit;
 
     int ntc_ue = (Data->fTCFinderBlockUe) ? Data->fTCFinderBlockUe->NTimeClusters() : 0;
     int nhel_de = (Data->fHelixBlockDe) ? Data->fHelixBlockDe->NHelices() : 0;
@@ -1255,13 +1255,13 @@ namespace ConvAna {
     }
 
     if(trk_ue_veto > 0)
-      VetoID |= ConvAna::kTrkUeDtVetoBit;
+      VetoID |= mumep_ana::kTrkUeDtVetoBit;
     if(tc_ue_veto > 0)
-      VetoID |= ConvAna::kTrkTcVetoBit;
+      VetoID |= mumep_ana::kTrkTcVetoBit;
     if(helix_de_veto > 0)
-      VetoID |= ConvAna::kNHelDeVetoBit;
+      VetoID |= mumep_ana::kNHelDeVetoBit;
     if(helix_ue_veto > 0)
-      VetoID |= ConvAna::kNHelUeVetoBit;
+      VetoID |= mumep_ana::kNHelUeVetoBit;
     //-----------------------------------------------------------------------------
     // 5. veto too energetic clusters in the event close to the track of interest
     //    15 ns is OK, 140 MeV may need to be tuned. For now, set the energy threshold
@@ -1281,13 +1281,13 @@ namespace ConvAna {
             //-----------------------------------------------------------------------------
             // suspect misreconstructed upstream leg, so the cluster is in-time
             //-----------------------------------------------------------------------------
-            VetoID |= ConvAna::kCaloInTimeVetoBit;
+            VetoID |= mumep_ana::kCaloInTimeVetoBit;
           } else if((dt > 50) && (dt <= 200)) {
             //-----------------------------------------------------------------------------
             // suspect missed upstream leg, and only the downstream leg reconstructed , so the
             // cluster is early
             //-----------------------------------------------------------------------------
-            VetoID |= ConvAna::kCaloEarlyVetoBit;
+            VetoID |= mumep_ana::kCaloEarlyVetoBit;
           }
         }
       }
@@ -1449,4 +1449,4 @@ namespace ConvAna {
 
     return 0;
   }
-} // namespace ConvAna
+} // namespace mumep_ana

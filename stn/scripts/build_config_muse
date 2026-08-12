@@ -1,0 +1,47 @@
+#!/bin/bash
+#------------------------------------------------------------------------------
+# BUILD_BASE doesn't replace the SATELLITE_RELEASE, need both
+#------------------------------------------------------------------------------
+base=$MUSE_WORK_DIR
+
+
+if [ ".$MUSE_VERBOSE" != ".0" ] ; then echo mumep_ana::build_config_muse:001: $\0:$0 : \$PWD=$PWD  \$base=$base ; fi
+
+# pkg=`pwd | awk -F / '{print $(NF-1)}'`
+subpkg=`echo $0 | awk -F / '{print $(NF-2)}'`
+pkg=$1
+if [[ "${pkg}" == "" ]]; then
+    echo "Failed to parse the package name from $0"
+    exit 1
+fi
+if [[ "${pkg}" == "${subpkg}" ]]; then
+    subpkg=""
+    pkg_dir=$MUSE_WORK_DIR/$pkg
+    local_path="../../$pkg"
+    pkg_include_dir=$base/include/$pkg
+else
+    pkg_dir=$MUSE_WORK_DIR/$pkg/$subpkg
+    local_path="../../../$pkg/$subpkg"
+    pkg_include_dir=$base/include/$pkg/$subpkg
+fi
+
+list_of_subpackages="ana"
+#------------------------------------------------------------------------------
+# package and its subpackages
+#------------------------------------------------------------------------------
+if [ ! -d $pkg_include_dir ] ; then
+    if [ $MUSE_VERBOSE != 0 ] ; then echo mumep_ana::build_config_muse: pwd=$pwd ; creating $base/include/$pkg ; fi
+    mkdir -p $pkg_include_dir
+elif [ $MUSE_VERBOSE != 0 ] ; then
+    echo "Directory $pkg_include_dir exists"
+fi
+#------------------------------------------------------------------------------
+# make symbolic links local, as they are
+#------------------------------------------------------------------------------
+for d in $list_of_subpackages ; do
+    if [[ -e $pkg_include_dir ]] && [[ ! -e $pkg_include_dir/$d ]] ; then
+        cmd="ln -s $local_path/$d/$d $pkg_include_dir/$d"
+        if [ $MUSE_VERBOSE != 0 ] ; then echo `pwd`$0 : executing: $cmd ; fi
+        $cmd
+    fi
+done

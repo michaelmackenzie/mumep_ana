@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+#
+# Script to build the files found in this directory.
+#------------------------------------------------------------------------------
+import os, copy
+Import('ana_env')
+Import('stntuple_helper')
+#------------------------------------------------------------------------------
+# 2016-10-10: STNTUPLE link: add ROOT 'EG' library after 'Physics' library
+#------------------------------------------------------------------------------
+def local_build():
+    local_env = ana_env.Clone();
+    rootlibs  = local_env['ROOTLIBS']
+
+    if ( not ("EG"    in rootlibs)): rootlibs.insert(rootlibs.index("Physics")+1,"EG");
+    if ( not ("TMVA"  in rootlibs)): rootlibs.append("TMVA");
+
+    helper = stntuple_helper(local_env);
+
+    helper.handle_dictionaries(".hh", []);
+
+    skip_list = []
+
+    mu2e_libs = [ 'mu2e_MCDataProducts',
+                  'mu2e_Mu2eUtilities' ,
+                  'artanalysis_TrkDiag',
+                  'ROOTTMVASofie'      ,
+                  'openblas'           ,
+                 ]
+
+    stntuple_libs = [ 'Stntuple_val', 'Stntuple_alg', 'Stntuple_loop',
+                      'Stntuple_obj', 'Stntuple_geom', 'Stntuple_base'
+                  ];
+
+    mc_libs = []
+
+    libs          = stntuple_libs + mc_libs + [
+        rootlibs
+    ] + mu2e_libs;
+
+    list_of_cc_files = Glob('*.cc',strings=True);
+    helper.build_libs(list_of_cc_files,skip_list,libs);
+
+local_build()
+# print "tmpdir:"+env['TMP_LIB_DIR']

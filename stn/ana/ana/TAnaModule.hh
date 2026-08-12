@@ -1,8 +1,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
 ///////////////////////////////////////////////////////////////////////////////
-#ifndef __ConvAna_ana_TAnaModule_hh__
-#define __ConvAna_ana_TAnaModule_hh__
+#ifndef __mumep_ana_ana_TAnaModule_hh__
+#define __mumep_ana_ana_TAnaModule_hh__
 
 // standard includes
 #include <climits>
@@ -34,22 +34,22 @@
 #include "Stntuple/obj/TStnTriggerBlock.hh"
 
 // local includes
-#include "ConvAna/ana/CRVHist_t.hh"
-#include "ConvAna/ana/CRVStubPar_t.hh"
-#include "ConvAna/ana/ClusterHist_t.hh"
-#include "ConvAna/ana/ClusterPar_t.hh"
-#include "ConvAna/ana/CosmicVetoData_t.hh"
-#include "ConvAna/ana/EventHist_t.hh"
-#include "ConvAna/ana/EventPar_t.hh"
-#include "ConvAna/ana/GenpHist_t.hh"
-#include "ConvAna/ana/HelixHist_t.hh"
-#include "ConvAna/ana/HelixPar_t.hh"
-#include "ConvAna/ana/SimpHist_t.hh"
-#include "ConvAna/ana/TrackHist_t.hh"
-#include "ConvAna/ana/TrackPar_t.hh"
-#include "ConvAna/ana/TriggerInfo.hh"
+#include "mumep_ana/stn/ana/CRVHist_t.hh"
+#include "mumep_ana/stn/ana/CRVStubPar_t.hh"
+#include "mumep_ana/stn/ana/ClusterHist_t.hh"
+#include "mumep_ana/stn/ana/ClusterPar_t.hh"
+#include "mumep_ana/stn/ana/CosmicVetoData_t.hh"
+#include "mumep_ana/stn/ana/EventHist_t.hh"
+#include "mumep_ana/stn/ana/EventPar_t.hh"
+#include "mumep_ana/stn/ana/GenpHist_t.hh"
+#include "mumep_ana/stn/ana/HelixHist_t.hh"
+#include "mumep_ana/stn/ana/HelixPar_t.hh"
+#include "mumep_ana/stn/ana/SimpHist_t.hh"
+#include "mumep_ana/stn/ana/TrackHist_t.hh"
+#include "mumep_ana/stn/ana/TrackPar_t.hh"
+#include "mumep_ana/stn/ana/TriggerInfo.hh"
 
-namespace ConvAna {
+namespace mumep_ana {
   class TAnaModule : public TStnModule {
   public:
     //-----------------------------------------------------------------------------
@@ -100,7 +100,7 @@ namespace ConvAna {
     TStnTriggerBlock* fTriggerBlock = nullptr;
     TString fTriggerBlockName;
 
-    ConvAna::EventPar_t fEvtPar;
+    mumep_ana::EventPar_t fEvtPar;
     TTree* fNormTree;
     NormInfo_t fNormInfo;
     TStntuple* fStntuple; // STNTUPLE singleton, for algorithm access
@@ -133,7 +133,7 @@ namespace ConvAna {
     //  functions
     //-----------------------------------------------------------------------------
   public:
-    TAnaModule(const char* name = "ConvAna_Ana", const char* title = "Ana");
+    TAnaModule(const char* name = "mumep_ana_Ana", const char* title = "Ana");
     ~TAnaModule();
 
     //-----------------------------------------------------------------------------
@@ -147,29 +147,29 @@ namespace ConvAna {
     // other methods
     //-----------------------------------------------------------------------------
     void BookNormTree();
-    void BookEventHistograms(ConvAna::EventHist_t* Hist, const char* Folder);
-    void BookGenpHistograms(ConvAna::GenpHist_t* Hist, const char* Folder);
-    void BookSimpHistograms(ConvAna::SimpHist_t* Hist, const char* Folder);
-    void BookTrackHistograms(ConvAna::TrackHist_t* Hist, const char* Folder);
-    void BookHelixHistograms(ConvAna::HelixHist_t* Hist, const char* Folder);
-    void BookClusterHistograms(ConvAna::ClusterHist_t* Hist, const char* Folder);
-    void BookCRVClusterHistograms(ConvAna::CRVClusterHist_t* Hist, const char* Folder);
+    void BookEventHistograms(mumep_ana::EventHist_t* Hist, const char* Folder);
+    void BookGenpHistograms(mumep_ana::GenpHist_t* Hist, const char* Folder);
+    void BookSimpHistograms(mumep_ana::SimpHist_t* Hist, const char* Folder);
+    void BookTrackHistograms(mumep_ana::TrackHist_t* Hist, const char* Folder);
+    void BookHelixHistograms(mumep_ana::HelixHist_t* Hist, const char* Folder);
+    void BookClusterHistograms(mumep_ana::ClusterHist_t* Hist, const char* Folder);
+    void BookCRVClusterHistograms(mumep_ana::CRVClusterHist_t* Hist, const char* Folder);
 
-    void FillEventHistograms(ConvAna::EventHist_t* Hist, ConvAna::EventPar_t* EvtPar, float Weight = 1.f);
-    void FillGenpHistograms(ConvAna::GenpHist_t* Hist, TGenParticle* Genp, float Weight = 1.f);
-    void FillSimpHistograms(ConvAna::SimpHist_t* Hist, TSimParticle* Simp, float Weight = 1.f);
-    void FillTrackHistograms(ConvAna::TrackHist_t* Hist, ConvAna::TrackPar_t* TrkPar, float Weight = 1.f);
-    void FillHelixHistograms(ConvAna::HelixHist_t* Hist, ConvAna::HelixPar_t* HlxPar, float Weight = 1.f);
-    void FillClusterHistograms(ConvAna::ClusterHist_t* Hist, ConvAna::ClusterPar_t* Par, float Weight = 1.f);
-    void FillCRVClusterHistograms(ConvAna::CRVClusterHist_t* Hist, ConvAna::CRVStubPar_t* CrvPar, float Weight = 1.f);
+    void FillEventHistograms(mumep_ana::EventHist_t* Hist, mumep_ana::EventPar_t* EvtPar, float Weight = 1.f);
+    void FillGenpHistograms(mumep_ana::GenpHist_t* Hist, TGenParticle* Genp, float Weight = 1.f);
+    void FillSimpHistograms(mumep_ana::SimpHist_t* Hist, TSimParticle* Simp, float Weight = 1.f);
+    void FillTrackHistograms(mumep_ana::TrackHist_t* Hist, mumep_ana::TrackPar_t* TrkPar, float Weight = 1.f);
+    void FillHelixHistograms(mumep_ana::HelixHist_t* Hist, mumep_ana::HelixPar_t* HlxPar, float Weight = 1.f);
+    void FillClusterHistograms(mumep_ana::ClusterHist_t* Hist, mumep_ana::ClusterPar_t* Par, float Weight = 1.f);
+    void FillCRVClusterHistograms(mumep_ana::CRVClusterHist_t* Hist, mumep_ana::CRVStubPar_t* CrvPar, float Weight = 1.f);
 
     void InitEventInfo();
     float RMCWeight(const float gen_energy, const int spectrum, const float kmax = 90.1f);
 
-    void InitTrackPar(TStnTrack* Trk, ConvAna::TrackPar_t* TrkPar, TStnHelix* Hlx = nullptr);
-    void InitHelixPar(TStnHelix* Hlx, ConvAna::HelixPar_t* HlxPar);
-    void InitClusterPar(TStnCluster* Cluster, ConvAna::ClusterPar_t* Par);
-    void InitCRVStubPar(TCrvClusterBlock* CrvClusterBlock, ConvAna::CRVStubPar_t* CrvStubPar, int maxStubs = INT_MAX, TSimParticle* Simp = nullptr);
+    void InitTrackPar(TStnTrack* Trk, mumep_ana::TrackPar_t* TrkPar, TStnHelix* Hlx = nullptr);
+    void InitHelixPar(TStnHelix* Hlx, mumep_ana::HelixPar_t* HlxPar);
+    void InitClusterPar(TStnCluster* Cluster, mumep_ana::ClusterPar_t* Par);
+    void InitCRVStubPar(TCrvClusterBlock* CrvClusterBlock, mumep_ana::CRVStubPar_t* CrvStubPar, int maxStubs = INT_MAX, TSimParticle* Simp = nullptr);
     CRVStubPar_t* MatchCRVToTrack(TStnTrack* track, TCrvClusterBlock* clusters, CRVStubPar_t* stubPars, int maxStubs = INT_MAX);
     TStnTrack* MatchUpstreamTrack(TStnTrack* track, TStnTrackBlock* tracks);
     bool ResolveAmbiguity(TStnTrack* t_1, TStnTrack* t_2) {
@@ -313,5 +313,5 @@ namespace ConvAna {
 
     ClassDef(TAnaModule, 0)
   };
-} // namespace ConvAna
+} // namespace mumep_ana
 #endif

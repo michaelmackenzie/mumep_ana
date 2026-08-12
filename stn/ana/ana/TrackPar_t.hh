@@ -5,7 +5,7 @@
 
 #include <map>
 
-#include "mumep_ana/ana/CRVStubPar_t.hh"
+#include "mumep_ana/stn/ana/CRVStubPar_t.hh"
 #include "Stntuple/obj/TSimParticle.hh"
 #include "Stntuple/obj/TStnCluster.hh"
 #include "Stntuple/obj/TStnHelix.hh"

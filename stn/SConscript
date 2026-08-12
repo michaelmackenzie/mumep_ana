@@ -7,8 +7,8 @@ sys.path.append(os.getenv("MUSE_WORK_DIR")+'/site_scons')
 #------------------------------------------------------------------------------
 # print("Stntuple/SConscript:muse branch: PWD:"+os.getenv("PWD"))
 
-x = subprocess.call(os.getenv("MUSE_WORK_DIR")+'/ConvAna/scripts/build_config_muse ConvAna',shell=True)
-ConvAna_env = env.Clone()
+x = subprocess.call(os.getenv("MUSE_WORK_DIR")+'/mumep_ana/stn/scripts/build_config_muse mumep_ana',shell=True)
+ana_env = env.Clone()
 #------------------------------------------------------------------------------
 # done
 #------------------------------------------------------------------------------
@@ -23,14 +23,14 @@ w1  = w[0:len(w)-2]
 dir = '/'.join(w1)
 # print('dir = ',dir)
 
-ConvAna_env['CPPPATH' ].append('-I'+dir+'/include');
-ConvAna_env['CXXFLAGS'].append('-I'+dir+'/include');
-ConvAna_env['CPPPATH' ].append(os.environ['MUSE_WORK_DIR']+'/include');
+ana_env['CPPPATH' ].append('-I'+dir+'/include');
+ana_env['CXXFLAGS'].append('-I'+dir+'/include');
+ana_env['CPPPATH' ].append(os.environ['MUSE_WORK_DIR']+'/include');
 #------------------------------------------------------------------------------
 # done
 #------------------------------------------------------------------------------
-ConvAna_env.Append(BUILDERS = {'StntupleCodegen'  : stntuple_codegen})
-ConvAna_env.Append(BUILDERS = {'StntupleRootCint' : stntuple_rootcint})
+ana_env.Append(BUILDERS = {'StntupleCodegen'  : stntuple_codegen})
+ana_env.Append(BUILDERS = {'StntupleRootCint' : stntuple_rootcint})
 
-Export('ConvAna_env')
+Export('ana_env')
 Export('stntuple_helper')
