@@ -454,7 +454,7 @@ int do_likelihood_fit(
     TCanvas* c = new TCanvas("c_fit", "Profile likelihood fit", 800, 600);
     auto frame = obs->frame();
     frame->SetTitle("Best-fit model");
-    frame->SetXTitle("momentum (MeV/c)");
+    frame->SetXTitle("Momentum (MeV/c)");
     frame->SetYTitle(Form("Events / %.1f MeV/c", (obs->getMax()-obs->getMin())/obs->getBins()));
     data->plotOn(frame, RooFit::Name("data"));
     full_pdf->plotOn(frame, RooFit::Name("total"), RooFit::LineColor(kBlue));

@@ -100,7 +100,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     TCanvas* c = new TCanvas("c_model", "c_model", 1200, 1000);
     auto frame = obs.frame();
     frame->SetTitle(Form("%s model", signal_model.title_.Data()));
-    frame->SetXTitle("momentum (MeV/c)");
+    frame->SetXTitle("Momentum (MeV/c)");
 
     // data the data
     data->plotOn(frame, RooFit::Name("data"));
@@ -125,7 +125,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     frame->SetYTitle("");
     frame->Draw();
 
-    c = plot_fit_frame(frame, obs, "momentum (MeV/c)", Form("Events / %.1f MeV/c", bin_width_), "data", "bkg", npot_, livetime_, nmuons_);
+    c = plot_fit_frame(frame, obs, "Momentum (MeV/c)", Form("Events / %.1f MeV/c", bin_width_), "data", "bkg", npot_, livetime_, nmuons_);
     auto pad1 = (TPad*) c->GetPrimitive("pad1");
 
     // add a legend

@@ -224,7 +224,7 @@ int fit_component_model(TString process,
   }
 
   const bool use_fractional_deviation_plot = (component == "signal");
-  auto c = plot_fit_frame(frame, obs, "momentum (MeV/c)", "", "data", "pdf", npot_, livetime_, nmuons_,
+  auto c = plot_fit_frame(frame, obs, "Momentum (MeV/c)", "", "data", "pdf", npot_, livetime_, nmuons_,
                           use_fractional_deviation_plot);
   if(!c) return 10;
 

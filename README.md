@@ -2,6 +2,16 @@
 
 This repo is intended for muon to positron analysis at Mu2e, focused on Run 1A.
 
+## Best practices
+
+In general, we should try to follow these guidelines:
+- We should strive for collaborative work, including all who want to participate.
+- All work and results should be scripted and repeatable.
+- Figures in the paper should be repeatable and created using scripts added to this repository.
+- Studies that evaluate important paper inputs, such as systematic uncertainties, should be documented here.
+- Inputs to analysis tools (such as histograms and datasets) should be stored in a central location such as: `/exp/mu2e/data/projects/run1a/mumep_ana/`
+- Sensitivity results/analysis workspaces should be documented and similarly stored.
+- Tools to evaluate inputs or sensitivity should be available to the collaboration, regularly updated, and version controlled to track changes in results.
 
 ## Building
 
@@ -83,7 +93,38 @@ cd ../..
 
 ## Making initial plots
 
+Preliminary plots can be made using the [Plotter](analysis/plotter) tool.
+An example is:
+```bash
+cd analysis
+root.exe -q -b 'make_plots.C(true, {75})'
+```
 
 ## Making Combine models
 
+The Combine workflow has several steps:
+- Fit input histograms and extract PDFs
+- Combine the PDFs and rates into a total model
+- Create the Combine data cards/workspaces, merging cards for multiple categories if needed
+- Running the statistical tests
+
+An example of the complete workflow:
+```bash
+cd analysis/combine/
+# Single category
+time ./full_loop.sh -p mumem -s "75" -t evt_r0100 --evt-ana
+# Two exclusive categories
+time ./full_loop.sh -p mumem -s "77 78" -t evt_r0100 --evt-ana
+```
+
 ## Statistical analysis
+
+Using Combine, many statistical tests can be performed. For example:
+```bash
+cd analysis/combine/
+
+# Extract approximate Asimov 90% CL CL_s upper limit
+CARD="datacards/combine_total_mumem_75_evt_r0100.txt"
+ARGS="-t -1 --rMin -100. --rMax 100. --cl 0.9 --cminDefaultMinimizerStrategy=0 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1 --rAbsAcc 0.0001 --rRelAcc 0.001"
+combine -d ${CARD} ${ARGS}
+```
