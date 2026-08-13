@@ -93,6 +93,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   // Draw the inputs
   if(print_) {
+    const double signal_scale = (process == "mumem") ? 20. : 1.7e3;
     TString figdir = Form("figures/%s%s", process.Data(), (tag != "") ? ("_"+tag).Data() : "");
     gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", figdir.Data(), figdir.Data()));
 
@@ -108,7 +109,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     sig_pdf->plotOn(frame, RooFit::Name(signal_model.name_),
                     RooFit::LineColor(signal_model.color_), RooFit::FillColor(signal_model.color_),
                     RooFit::FillStyle(3005),
-                    RooFit::Normalization(signal_model.rate_, RooAbsReal::NumEvent));
+                    RooFit::Normalization(signal_scale*signal_model.rate_, RooAbsReal::NumEvent));
 
     // draw the backgrounds
     tot_bkg.plotOn(frame, RooFit::Invisible(), RooFit::Name("bkg"));

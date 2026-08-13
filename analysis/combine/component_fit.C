@@ -183,12 +183,9 @@ int fit_component_model(TString process,
   if(fit_input == "total"   && data_total)   fit_data = data_total.get();
 
   RooAbsPdf* model_pdf = component_analytic_pdf(component, obs, process, selection);
-  const TString pdf_mode = normalize_pdf_type(pdf_type);
-  // In auto mode, prefer fitting/plotting the analytic shape when available,
-  // even if the saved workspace PDF is later converted to RooHistPdf.
-  const bool default_hist_pdf_choice = (hist_pdfs_ && !(pdf_mode == "auto" && model_pdf));
+  const bool use_hist_pdf = (model_pdf == nullptr);
   RooAbsPdf* pdf = choose_pdf_model(pdf_type,
-                                    default_hist_pdf_choice,
+                                    use_hist_pdf,
                                     obs,
                                     *fit_data,
                                     model_pdf,
@@ -196,12 +193,12 @@ int fit_component_model(TString process,
                                     component_title + " PDF",
                                     h);
 
-  if(component == "signal" && should_fit_pdf(pdf_type, default_hist_pdf_choice)) {
+  if(component == "signal" && should_fit_pdf(pdf_type, use_hist_pdf)) {
     obs.setMax((is_mumem) ? 107. : 95.);
-    if(run_component_fit(pdf, *fit_data, pdf_type, default_hist_pdf_choice, false)) return 20;
+    if(run_component_fit(pdf, *fit_data, pdf_type, use_hist_pdf, false)) return 20;
     obs.setMax(xmax);
   } else {
-    if(run_component_fit(pdf, *fit_data, pdf_type, default_hist_pdf_choice)) return 20;
+    if(run_component_fit(pdf, *fit_data, pdf_type, use_hist_pdf)) return 20;
   }
 
   double norm_val = h->Integral();
@@ -272,7 +269,7 @@ int fit_component_model(TString process,
 
   const TString suffix = (isys < 0) ? "" : Form("_sys_%i", isys);
   if(component == "signal" || component == "dio") {
-    return save_fit_workspace_with_hist(process, selection, tag, component, pdf, norm, h, suffix);
+    return save_fit_workspace_with_hist(process, selection, tag, component, pdf, obs, norm, h, suffix);
   }
   return save_fit_workspace(process, selection, tag, component, component_title, pdf, obs, norm, hist_pdfs_, suffix);
 }

@@ -373,23 +373,35 @@ int save_fit_workspace_with_hist(TString process,
                                  TString tag,
                                  TString component,
                                  RooAbsPdf* pdf,
+                                 RooRealVar& obs,
                                  RooRealVar& norm,
                                  TH1* hist,
                                  const TString out_suffix = "") {
   if(!pdf || !hist) return 1;
 
+  const char* hist_name = Form("%s_%i_%s_hist", process.Data(), selection, component.Data());
+  auto h_fit = (TH1*) hist->Clone(hist_name);
+  h_fit->SetName(hist_name);
+
+  pdf->SetName("tmp_pdf");
+  RooDataHist fit_data(Form("%s_%i_%s_data_hist", process.Data(), selection, component.Data()),
+                       Form("%s data hist", component.Data()),
+                       obs, h_fit);
+  RooHistPdf fit_pdf(Form("%s_%i_%s_pdf", process.Data(), selection, component.Data()),
+                     Form("%s PDF", component.Data()),
+                     obs, fit_data);
+
   const char* fitdir = Form("workspaces/%s%s", process.Data(), (tag == "") ? "" : ("_"+tag).Data());
   gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", fitdir, fitdir));
   TFile* fout = new TFile(Form("%s/%s_fit_%i%s.root", fitdir, component.Data(), selection, out_suffix.Data()), "RECREATE");
   RooWorkspace ws("workspace", "workspace");
-  ws.import(*pdf);
+  ws.import(fit_pdf);
   ws.import(norm);
   ws.Write();
-  hist->SetName(Form("%s_%i_%s_hist", process.Data(), selection, component.Data()));
-  hist->Write();
+  h_fit->Write();
   fout->Close();
 
-  print_pdf(pdf);
+  print_pdf(&fit_pdf);
   return 0;
 }
 
