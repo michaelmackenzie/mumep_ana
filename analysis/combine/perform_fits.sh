@@ -102,6 +102,7 @@ if [[ "${PROCESS}" == "mumep" ]]; then
     run_fit rmc_int_fit
     run_fit rmc_ext_fit
 elif [[ "${EVTANA}" != "" ]]; then
+    run_fit rmc_int_fit
     run_fit rmc_ext_fit
 fi
 if [[ "${NOSYS}" == "" ]]; then

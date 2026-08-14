@@ -42,7 +42,8 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooDataHi
   frame->SetXTitle("Momentum (MeV/c)");
 
   // data the data
-  data->plotOn(frame, RooFit::Name("data"));
+  gStyle->SetEndErrorSize(0);
+  data->plotOn(frame, RooFit::Name("data"), RooFit::XErrorSize(0), RooFit::LineWidth(2));
 
   // draw the signal
   auto sig_pdf = signal_model.pdf_;
@@ -76,10 +77,14 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooDataHi
 
   c = plot_fit_frame(frame, obs, "Momentum (MeV/c)", Form("Events / %.1f MeV/c", bin_width_), "data", "bkg", npot_, livetime_, nmuons_);
   auto pad1 = (TPad*) c->GetPrimitive("pad1");
+  gPad->SetTickx(1);
+  gPad->SetTicky(1);
 
   // add a legend
-  TLegend* leg = new TLegend((pad1) ? pad1->GetLeftMargin() : 0.1, 0.75, (pad1) ? 1. - pad1->GetRightMargin() : 0.9, (pad1) ? 1. - pad1->GetTopMargin() : 0.9);
+  TLegend* leg = new TLegend((pad1) ? 0.03 + pad1->GetLeftMargin() : 0.13, 0.75, (pad1) ? 0.98 - pad1->GetRightMargin() : 0.88, (pad1) ? 0.97 - pad1->GetTopMargin() : 0.9);
   leg->SetNColumns(3); leg->SetLineWidth(0); leg->SetFillColor(0); leg->SetLineColor(0); leg->SetFillStyle(0);
+  leg->SetTextFont(132);
+  leg->SetTextSize(0.055);
   leg->AddEntry(signal_model.name_, "Signal", "L");
   for(auto& bkg : background_model) leg->AddEntry(bkg.name_, bkg.title_, "L");
   leg->Draw();
@@ -93,6 +98,61 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooDataHi
   delete frame;
   delete c;
 
+  // Plot a stack model
+  c = standard_canvas("c");
+  gStyle->SetOptStat(0);
+
+  THStack* stack = new THStack("stack","");
+  std::sort(background_model.begin(), background_model.end(), [](const pdf_info& a, const pdf_info& b) {
+        return a.rate_ < b.rate_;
+  });
+
+  leg = new TLegend(0.03 + c->GetLeftMargin(), 0.75, 0.98 - c->GetRightMargin(), 0.97 - c->GetTopMargin());
+  leg->SetNColumns(3); leg->SetLineWidth(0); leg->SetFillColor(0); leg->SetLineColor(0); leg->SetFillStyle(0);
+  leg->SetTextFont(132);
+  leg->SetTextSize(0.043);
+
+  auto h_sig = signal_model.pdf_->createHistogram("h_sig", obs);
+  h_sig->Scale(signal_model.rate_);
+  h_sig->SetLineColor(signal_model.color_);
+  h_sig->SetLineWidth(2);
+  h_sig->SetFillStyle(3004);
+  h_sig->SetFillColor(signal_model.color_);
+  leg->AddEntry(h_sig, signal_model.title_, "L");
+
+  for(auto& bkg : background_model) {
+    TH1* h = bkg.pdf_->createHistogram(bkg.name_, obs);
+    h->Scale(bkg.rate_);
+    h->SetLineColor(kBlack);
+    h->SetLineWidth(1);
+    h->SetFillColor(bkg.color_);
+    h->SetFillStyle(kSolid);
+    stack->Add(h);
+    leg->AddEntry(h, bkg.title_, "F");
+  }
+
+
+  h_sig->GetXaxis()->SetLabelFont(132);
+  h_sig->GetXaxis()->SetTitleFont(132);
+  h_sig->GetYaxis()->SetLabelFont(132);
+  h_sig->GetYaxis()->SetTitleFont(132);
+  h_sig->Draw("hist");
+  stack->Draw("hist noclear same");
+  h_sig->Draw("hist same");
+  h_sig->SetTitle(Form(";Momentum (MeV/c);Events / (%.2g MeV/c)", h_sig->GetBinWidth(1)));
+
+  leg->Draw();
+
+  c->SaveAs(Form("%s/input_stack_%i.png", figdir.Data(), selection));
+  const double ymin = 1.e-4;
+  const double max_val = max(((TH1*) stack->GetStack()->Last())->GetMaximum(), h_sig->GetMaximum());
+  const double ymax = ymin*std::pow(max_val/ymin, 1./0.73);
+  h_sig->GetYaxis()->SetRangeUser(ymin, ymax);
+  c->SetLogy();
+  c->SaveAs(Form("%s/input_stack_%i_log.png", figdir.Data(), selection));
+  delete c;
+  delete h_sig;
+  delete stack;
 }
 
 //---------------------------------------------------------------------------------------------------------------------------

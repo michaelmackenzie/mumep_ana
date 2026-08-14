@@ -351,20 +351,33 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
 
   const char* name = Form("%s_%i_rmc_ext", process.Data(), selection);
 
-  // RooRealVar* m_max = new RooRealVar(Form("%s_m_max", name), "Kinematic Edge", 101.0, 90., 105.);
-  // RooRealVar* c     = new RooRealVar(Form("%s_c", name), "Slope parameter", -2., -20., 0.);
-  // RooRealVar* p     = new RooRealVar(Form("%s_p", name), "Power parameter", 2.5, 0., 3.);
-  // auto pdf = new RooGenericPdf(Form("%s_pdf", name), "Safe Argus Shape",
-  //                              Form("(%s < %s) ? (%s * pow(1.0 - pow(%s/%s, 2), %s) * exp(%s * (1.0 - pow(%s/%s, 2)))) : 0.0",
-  //                                   obs.GetName(), m_max->GetName(),
-  //                                   obs.GetName(), obs.GetName(), m_max->GetName(), p->GetName(),
-  //                                   c->GetName(), obs.GetName(), m_max->GetName()),
-  //                              RooArgList(obs, *m_max, *c, *p));
+  RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);
+  RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
+  RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
+  RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 1.932, 0.01, 5.0);
+  auto pdf = new RooGenericPdf(Form("%s_pdf", name), "Gamma-Poly Hybrid",
+                               Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
+                                    obs.GetName(), x0->GetName(), alpha->GetName(),
+                                    obs.GetName(), beta->GetName(),
+                                    lambda->GetName(), obs.GetName()),
+                               RooArgList(obs, *x0, *alpha, *beta, *lambda));
 
-  // RooRealVar* m_max = new RooRealVar(Form("%s_m_max", name), "Kinematic Edge", 101.0, 90., 105.);
-  // RooRealVar* c     = new RooRealVar(Form("%s_c"    , name), "Slope parameter", -2., -20., 0.);
-  // RooRealVar* p     = new RooRealVar(Form("%s_p"    , name), "Power parameter", 2.5, 0., 3.); // 0.5 is standard Argus
-  // auto pdf = new RooArgusBG(Form("%s_pdf", name), "Argus Shape", obs, *m_max, *c, *p);
+
+  res.pdf_   = pdf;
+  res.rate_  = 50.; // rough starting point
+  res.color_ = kAtlantic+2;
+  res.name_  = "rmc_ext";
+  res.title_ = "RMC (external)";
+
+  return res;
+}
+
+//---------------------------------------------------------------------------------------------------------------------------
+pdf_info get_rmc_int_model(RooRealVar& obs, TString process, int selection, const bool freeze = true) {
+
+  pdf_info res;
+
+  const char* name = Form("%s_%i_rmc_int", process.Data(), selection);
 
   RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);
   RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
@@ -377,29 +390,12 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
                                     lambda->GetName(), obs.GetName()),
                                RooArgList(obs, *x0, *alpha, *beta, *lambda));
 
-// RooRealVar* x_max  = new RooRealVar(Form("%s_x_max", name), "Endpoint", 102.0, 95.0, 110.0);
-  // RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail Suppression", 0.1, 0.0, 2.0);
-  // auto pdf = new RooGenericPdf(Form("%s_pdf", name), "Tuned Bulk",
-  //                              Form("pow(%s - %s, 2) * %s * exp(-%s * %s)",
-  //                                   x_max->GetName(), obs.GetName(), obs.GetName(),
-  //                                   lambda->GetName(), obs.GetName()),
-  //                              RooArgList(obs, *x_max, *lambda));
-
-  // RooRealVar* x0    = new RooRealVar(Form("%s_x0"   , name), "Threshold", 96.0, 90., 100.); // low edge
-  // RooRealVar* alpha = new RooRealVar(Form("%s_alpha", name), "Rise power", 1.0, 0.1, 3.0);
-  // RooRealVar* beta  = new RooRealVar(Form("%s_beta" , name), "Tail decay", 0.5, 0.01, 5.0);
-  // auto pdf = new RooGenericPdf("gamma_pdf", "Gamma Bulk",
-  //                              Form("pow(%s - %s, %s) * exp(-%s * (%s - %s))",
-  //                                   obs.GetName(), x0->GetName(), alpha->GetName(),
-  //                                   beta->GetName(), obs.GetName(), x0->GetName()),
-  //                              RooArgList(obs, *x0, *alpha, *beta));
-
 
   res.pdf_   = pdf;
   res.rate_  = 50.; // rough starting point
-  res.color_ = kAtlantic+2;
-  res.name_  = "rmc_ext";
-  res.title_ = "RMC (external)";
+  res.color_ = kAtlantic;
+  res.name_  = "rmc_int";
+  res.title_ = "RMC (internal)";
 
   return res;
 }

@@ -22,13 +22,14 @@ RooAbsPdf* component_analytic_pdf(const TString& component,
                                   const int selection) {
   TString c = component;
   c.ToLower();
-  if(c == "signal")  return get_signal_model(obs, process, selection, false).pdf_;
-  if(c == "dio")     return get_dio_model(obs, process, selection, true).pdf_;
-  if(c == "cosmic")  return get_cosmic_model(obs, process, selection, false).pdf_;
-  if(c == "pbar")    return get_pbar_model(obs, process, selection, false).pdf_;
+  if(c == "signal")  return get_signal_model (obs, process, selection, false).pdf_;
+  if(c == "dio")     return get_dio_model    (obs, process, selection,  true).pdf_;
+  if(c == "cosmic")  return get_cosmic_model (obs, process, selection, false).pdf_;
+  if(c == "pbar")    return get_pbar_model   (obs, process, selection, false).pdf_;
   if(c == "rpc_ext") return get_rpc_ext_model(obs, process, selection, false).pdf_;
   if(c == "rpc_int") return get_rpc_int_model(obs, process, selection, false).pdf_;
   if(c == "rmc_ext") return get_rmc_ext_model(obs, process, selection, false).pdf_;
+  if(c == "rmc_int") return get_rmc_int_model(obs, process, selection, false).pdf_;
   return nullptr;
 }
 

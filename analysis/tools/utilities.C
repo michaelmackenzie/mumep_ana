@@ -71,7 +71,7 @@ TLatex* Mu2e_lumi(const bool is_data, const double npot = -1., const double live
   const float head_time = livetime / std::pow(10.,std::max(0,ntens_time));
   const int ntens_muons = (nmuons > 0.) ? int(std::log10(nmuons)) : 0;
   const float head_muons = nmuons / std::pow(10.,std::max(0,ntens_muons));
-  TString lumistamp = Form("%.1f x 10^{%i} POT (1BB); %.1f x 10^{%i} s; %.1f x 10^{%i} muon stops",
+  TString lumistamp = Form("%.1f x 10^{%i} POT; %.1f x 10^{%i} s; %.1f x 10^{%i} muon stops",
                            head_pot, ntens_pot,
                            head_time, ntens_time,
                            head_muons, ntens_muons);
@@ -88,7 +88,7 @@ TLatex* Mu2e_lumi(const bool is_data, const double npot = -1., const double live
   logo->SetTextFont(52);
   logo->DrawLatex(x0 + 0.08, y0,  (is_data) ? "Preliminary" : "Simulation");
   logo->SetTextSize(extraTextSize);
-  logo->SetTextFont(42);
+  logo->SetTextFont(132);
   logo->SetTextAlign(31);
   if(npot > 0.) logo->DrawLatex(1. - gPad->GetRightMargin(), y0, lumistamp);
   return logo;
@@ -112,6 +112,47 @@ static bool handle_canvas(TCanvas* c, int& status, const bool cleanup = true) {
   }
   if(cleanup) Empty_Canvas(c);
   return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------
+TCanvas* standard_canvas(const char* name = "c") {
+  TCanvas* c = new TCanvas(name, name, 1100, 825);
+  c->SetRightMargin(0.05);
+  c->SetTopMargin(0.05);
+  c->SetLeftMargin(0.13);
+  c->SetBottomMargin(0.13);
+  c->SetTicks();
+  return c;
+}
+
+//----------------------------------------------------------------------------------------------------------------------------
+TCanvas* standard_split_canvas(const char* name, TPad*& pad1, TPad*& pad2) {
+  TCanvas* c = new TCanvas(name, name, 1100, 825*1.25);
+  pad1 = new TPad("pad1", "pad1", 0., 0.3, 1., 1.0);
+  pad2 = new TPad("pad2", "pad2", 0., 0. , 1., 0.3);
+
+  pad1->SetRightMargin(0.05);
+  pad1->SetTopMargin(0.05);
+  pad1->SetLeftMargin(0.13);
+  pad1->SetBottomMargin(0.03);
+  pad1->SetTicks();
+  pad1->Draw();
+
+  pad2->SetRightMargin(0.05);
+  pad2->SetTopMargin(0.02);
+  pad2->SetLeftMargin(0.13);
+  pad2->SetBottomMargin(0.3);
+  pad2->SetTicks();
+  pad2->Draw();
+
+  return c;
+}
+
+int standard_font() {
+  gStyle->SetTextFont(132);
+  gStyle->SetLabelFont(132, "XYZ");
+  gStyle->SetTitleFont(132, "XYZ");
+  return 132;
 }
 
 //------------------------------------------------------------------------------------------------------------
@@ -327,6 +368,9 @@ TCanvas* plot_fit_frame(RooPlot* frame, RooRealVar& obs, TString xtitle, TString
   frame->GetXaxis()->SetTitleOffset(0.80);
   frame->SetTitle("");
   frame->SetXTitle("");
+  frame->GetXaxis()->SetLabelFont(132);
+  frame->GetYaxis()->SetLabelFont(132);
+  frame->GetYaxis()->SetTitleFont(132);
   frame->Draw();
 
   pad2->cd();
@@ -379,6 +423,7 @@ TCanvas* plot_fit_frame(RooPlot* frame, RooRealVar& obs, TString xtitle, TString
     auto hpull = frame->pullHist(data.Data(), pdf.Data());
     if(hpull) {
       hpull->SetName("ratio_fnc");
+      hpull->SetLineWidth(2);
       lower_frame->addPlotable(hpull,"PE1");
     } else {
       cout << __func__ << ": No pull histogram found with data = " << data.Data() << " pdf = " << pdf.Data() << endl;
@@ -398,6 +443,10 @@ TCanvas* plot_fit_frame(RooPlot* frame, RooRealVar& obs, TString xtitle, TString
   lower_frame->SetTitle("");
   lower_frame->GetYaxis()->SetTitle(yaxis_title.Data());
   lower_frame->GetXaxis()->SetTitle(xtitle.Data());
+  lower_frame->GetXaxis()->SetLabelFont(132);
+  lower_frame->GetXaxis()->SetTitleFont(132);
+  lower_frame->GetYaxis()->SetLabelFont(132);
+  lower_frame->GetYaxis()->SetTitleFont(132);
   lower_frame->Draw();
 
   TLine* line = new TLine(lower_frame->GetXaxis()->GetXmin(), 0., lower_frame->GetXaxis()->GetXmax(), 0.);
