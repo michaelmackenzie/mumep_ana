@@ -31,6 +31,71 @@ std::vector<RateUnc_t> rate_uncertainties(TString process) {
 }
 
 //---------------------------------------------------------------------------------------------------------------------------
+void print_model(TString figdir, const int selection, RooRealVar& obs, RooDataHist* data,
+                 pdf_info& signal_model,
+                 std::vector<pdf_info>& background_model, const bool is_mumem) {
+  const double signal_scale = (is_mumem) ? 20. : 1.7e3;
+
+  TCanvas* c = new TCanvas("c_model", "c_model", 1200, 1000);
+  auto frame = obs.frame();
+  frame->SetTitle(Form("%s model", signal_model.title_.Data()));
+  frame->SetXTitle("Momentum (MeV/c)");
+
+  // data the data
+  data->plotOn(frame, RooFit::Name("data"));
+
+  // draw the signal
+  auto sig_pdf = signal_model.pdf_;
+  sig_pdf->plotOn(frame, RooFit::Name(signal_model.name_),
+                  RooFit::LineColor(signal_model.color_), RooFit::FillColor(signal_model.color_),
+                  RooFit::FillStyle(3005),
+                  RooFit::Normalization(signal_scale*signal_model.rate_, RooAbsReal::NumEvent));
+
+  // draw the backgrounds
+  RooArgList bkg_pdfs;
+  RooArgList bkg_rates;
+  for(auto& bkg : background_model) {
+    if(!bkg.pdf_) continue;
+    bkg_pdfs.add(*bkg.pdf_);
+    bkg_rates.add(*(new RooRealVar(Form("%s_rate", bkg.name_.Data()), "", bkg.rate_)));
+  }
+  RooAddPdf tot_bkg("tot_bkg", "Total background", bkg_pdfs, bkg_rates);
+  tot_bkg.plotOn(frame, RooFit::Invisible(), RooFit::Name("bkg"));
+
+  for(auto& bkg : background_model) {
+    if(!bkg.pdf_) {
+      cout << __func__ << ": Background " << bkg.name_.Data() << " has an undefined PDF!\n";
+      continue;
+    }
+    bkg.pdf_->plotOn(frame, RooFit::Name(bkg.name_),
+                     RooFit::LineColor(bkg.color_), RooFit::Normalization(bkg.rate_, RooAbsReal::NumEvent));
+    cout << "bkg " << bkg.name_.Data() << " norm " << bkg.rate_ << endl;
+  }
+  frame->SetYTitle("");
+  frame->Draw();
+
+  c = plot_fit_frame(frame, obs, "Momentum (MeV/c)", Form("Events / %.1f MeV/c", bin_width_), "data", "bkg", npot_, livetime_, nmuons_);
+  auto pad1 = (TPad*) c->GetPrimitive("pad1");
+
+  // add a legend
+  TLegend* leg = new TLegend((pad1) ? pad1->GetLeftMargin() : 0.1, 0.75, (pad1) ? 1. - pad1->GetRightMargin() : 0.9, (pad1) ? 1. - pad1->GetTopMargin() : 0.9);
+  leg->SetNColumns(3); leg->SetLineWidth(0); leg->SetFillColor(0); leg->SetLineColor(0); leg->SetFillStyle(0);
+  leg->AddEntry(signal_model.name_, "Signal", "L");
+  for(auto& bkg : background_model) leg->AddEntry(bkg.name_, bkg.title_, "L");
+  leg->Draw();
+
+  c->SaveAs(Form("%s/input_pdfs_%i.png", figdir.Data(), selection));
+  if(pad1) {
+    frame->GetYaxis()->SetRangeUser(1.e-6, 100.*max(frame->GetMaximum(), 1.e2));
+    pad1->SetLogy();
+  }
+  c->SaveAs(Form("%s/input_pdfs_%i_log.png", figdir.Data(), selection));
+  delete frame;
+  delete c;
+
+}
+
+//---------------------------------------------------------------------------------------------------------------------------
 int build_model(TString process = "mumem", int selection = 20, TString tag = "") {
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag);
@@ -66,16 +131,6 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     }
   }
 
-  RooArgList bkg_pdfs;
-  RooArgList bkg_rates;
-  for(auto& bkg : background_model) {
-    if(!bkg.pdf_) continue;
-    bkg_pdfs.add(*bkg.pdf_);
-    bkg_rates.add(*(new RooRealVar(Form("%s_rate", bkg.name_.Data()), "", bkg.rate_)));
-  }
-  RooAddPdf tot_bkg("tot_bkg", "Total background", bkg_pdfs, bkg_rates);
-
-
   // Generate toy data
   if(!data) {
     for(auto& bkg : background_model) {
@@ -93,56 +148,9 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   // Draw the inputs
   if(print_) {
-    const double signal_scale = (process == "mumem") ? 20. : 1.7e3;
     TString figdir = Form("figures/%s%s", process.Data(), (tag != "") ? ("_"+tag).Data() : "");
     gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", figdir.Data(), figdir.Data()));
-
-    TCanvas* c = new TCanvas("c_model", "c_model", 1200, 1000);
-    auto frame = obs.frame();
-    frame->SetTitle(Form("%s model", signal_model.title_.Data()));
-    frame->SetXTitle("Momentum (MeV/c)");
-
-    // data the data
-    data->plotOn(frame, RooFit::Name("data"));
-
-    // draw the signal
-    sig_pdf->plotOn(frame, RooFit::Name(signal_model.name_),
-                    RooFit::LineColor(signal_model.color_), RooFit::FillColor(signal_model.color_),
-                    RooFit::FillStyle(3005),
-                    RooFit::Normalization(signal_scale*signal_model.rate_, RooAbsReal::NumEvent));
-
-    // draw the backgrounds
-    tot_bkg.plotOn(frame, RooFit::Invisible(), RooFit::Name("bkg"));
-    for(auto& bkg : background_model) {
-      if(!bkg.pdf_) {
-        cout << __func__ << ": Background " << bkg.name_.Data() << " has an undefined PDF!\n";
-        return 1;
-      }
-      bkg.pdf_->plotOn(frame, RooFit::Name(bkg.name_),
-                       RooFit::LineColor(bkg.color_), RooFit::Normalization(bkg.rate_, RooAbsReal::NumEvent));
-      cout << "bkg " << bkg.name_.Data() << " norm " << bkg.rate_ << endl;
-    }
-    frame->SetYTitle("");
-    frame->Draw();
-
-    c = plot_fit_frame(frame, obs, "Momentum (MeV/c)", Form("Events / %.1f MeV/c", bin_width_), "data", "bkg", npot_, livetime_, nmuons_);
-    auto pad1 = (TPad*) c->GetPrimitive("pad1");
-
-    // add a legend
-    TLegend* leg = new TLegend((pad1) ? pad1->GetLeftMargin() : 0.1, 0.75, (pad1) ? 1. - pad1->GetRightMargin() : 0.9, (pad1) ? 1. - pad1->GetTopMargin() : 0.9);
-    leg->SetNColumns(3); leg->SetLineWidth(0); leg->SetFillColor(0); leg->SetLineColor(0); leg->SetFillStyle(0);
-    leg->AddEntry(signal_model.name_, "Signal", "L");
-    for(auto& bkg : background_model) leg->AddEntry(bkg.name_, bkg.title_, "L");
-    leg->Draw();
-
-    c->SaveAs(Form("%s/input_pdfs_%i.png", figdir.Data(), selection));
-    if(pad1) {
-      frame->GetYaxis()->SetRangeUser(1.e-6, 100.*max(frame->GetMaximum(), 1.e2));
-      pad1->SetLogy();
-    }
-    c->SaveAs(Form("%s/input_pdfs_%i_log.png", figdir.Data(), selection));
-    delete frame;
-    delete c;
+    print_model(figdir, selection, obs, data, signal_model, background_model, process == "mumem");
   }
 
   // Open the output file
