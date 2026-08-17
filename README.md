@@ -113,14 +113,17 @@ An example of the complete workflow:
 ```bash
 cd analysis/combine/
 # Single category
-time ./full_loop.sh -p mumem -s "75" -t evt_r0100 --evt-ana
+time ./full_loop.sh -p mumem -s "75" -t evt_r0100 --evt-ana --no-sys
 # Two exclusive categories
-time ./full_loop.sh -p mumem -s "77 78" -t evt_r0100 --evt-ana
+time ./full_loop.sh -p mumem -s "77 78" -t evt_r0100 --evt-ana --no-sys
 ```
 
 ## Statistical analysis
 
-Using Combine, many statistical tests can be performed. For example:
+Using Combine, many statistical tests can be performed.
+See https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit for detailed documentation on Combine.
+
+An example evaluation:
 ```bash
 cd analysis/combine/
 
