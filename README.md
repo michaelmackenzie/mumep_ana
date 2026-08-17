@@ -26,7 +26,6 @@ git clone https://github.com/Mu2e/Production.git
 git clone https://github.com/Mu2e/EventNtuple.git
 git clone https://github.com/Mu2e/ArtAnalysis.git
 git clone https://github.com/Mu2e/MLTrain.git
-git clone https://github.com/michaelmackenzie/Mu2eEvtAna.git
 git clone https://github.com/michaelmackenzie/grim.git
 ```
 
@@ -91,6 +90,16 @@ cd ../..
 ## Processing Stntuple ntuples
 
 ## Processing EventNtuple ntuples
+
+EventNtuple inputs can be processed to make histograms/slim trees that are input to the statistical analysis tools.
+An example usage of these with Mu2eEvtAna is:
+```bash
+# See Mu2eEvtAna/scripts/datasets.C to see the naming convention
+# Ensure your rootlogon.C includes: 'gSystem->Load("$MUSE_BUILD_DIR/Mu2eEvtAna/lib/libmu2eevtana.so");'
+getToken
+root.exe -q -b -l 'Mu2eEvtAna/scripts/make_histograms.C(1/*N(processes)*/, "cpos1b1s5r0100", 1, "cnv_ana", 1 /*N(threads)*/, 1e5/*N(events / thread)*/)'
+ls -l 
+```
 
 ## Making initial plots
 
