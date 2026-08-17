@@ -84,7 +84,10 @@ int make_plots(const bool mumem = true, vector<int> sets = {7, 10, 20}, TString 
   else      plotter_->bkgs_ = {"rpc_ext", "rpc_int", "pbar", "cosmic", "rmc_ext", "rmc_int"};
   if(use_evtana_) {
     plotter_->configure_for_evtana();
-    plotter_->bkgs_ = {"rpc_int", "rpc_ext", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n", "cosmic", "dio"}; // only some are available
+    if(mumem)
+      plotter_->bkgs_ = {"rpc_int", "rpc_ext", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n", "cosmic", "dio"}; // only some are available
+    else
+      plotter_->bkgs_ = {"rpc_int", "rpc_ext", "cosmic", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n"}; // only some are available
     hist_mode_ = 1;
   }
   if(plotter_->init(dataset, tag)) {
@@ -100,7 +103,7 @@ int make_plots(const bool mumem = true, vector<int> sets = {7, 10, 20}, TString 
   int status(0);
   const bool mds = dataset.Contains("mds");
   TCanvas* c;
-  if(!mumem) signal_br_ = 1.7e-13;
+  if(!mumem) signal_br_ = 1.7e-12;
   const double base_br(signal_br_);
   plotter_->update_signal_br(signal_br_);
   plotter_->use_offsets_ = false; //don't use control regions for initial counts
@@ -109,7 +112,9 @@ int make_plots(const bool mumem = true, vector<int> sets = {7, 10, 20}, TString 
   if(use_evtana_) print_dataset_info(60);
   for(int set : sets) {
     if(set < 0) continue;
-    signal_br_ = (set%20 == 1) ? base_br/10. : base_br*100.;
+    if(mumem) {
+      signal_br_ = (set%20 == 1) ? base_br/10. : base_br*100.;
+    }
     if(mds)  signal_br_ = base_br;
     plotter_->update_signal_br(signal_br_);
     double p_min((mumem) ? (mds && set < 20) ? 95. : 100. : 87.), p_max((mumem) ? 110. : 97.);
@@ -135,6 +140,7 @@ int make_plots(const bool mumem = true, vector<int> sets = {7, 10, 20}, TString 
       c = plotter_->print_stack(plot_t("trkQual"        , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "track quality", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("trkQual_1"      , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "track quality", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("pid"            , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "PID", "")); if(!c) ++status; else Empty_Canvas(c);
+      c = plotter_->print_stack(plot_t("pid_1"          , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "PID", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("trkpid"         , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "tracker PID", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("cosmic_id"      , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "Cosmic ID", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("fitCons"        , "trk", set, 5, 0.  ,  1.  , 1., -1., logy, false, "p(#chi^2)", "")); if(!c) ++status; else Empty_Canvas(c);

@@ -107,7 +107,8 @@ void init_dataset_info() {
     // datasets_["mumem"]   = DatasetInfo_t(1e7       , 4009075, 0.,   1., rate_sig                     , "cele1b0s5r0100", "nts.mu2e.CeMLeadingLogOnSpill-reco-ntuple.MDC2025-002.root"  );
     // datasets_["cosmic"]  = DatasetInfo_t(t_cry4ab1 , 4120241, 0.,   1.,       1.                     , "cry4ab0s5r0100", "nts.mu2e.CosmicSignalOnSpill-reco-ntuple.MDC2025-002.root"   );
     // datasets_["dio"]     = DatasetInfo_t(25e6      , 8780533, 0.,   1., rate_dio_95                  , "dio00b0s5r0100", "nts.mu2e.DIOtail95OnSpill-reco-ntuple.MDC2025-002.root"      );
-    datasets_["mumem"]      = DatasetInfo_t(1e7       , 4137592, 0.,   1., rate_sig                     , "cele1b1s5r0100", "nts.mu2e.CeMLeadingLogMix1BB.MDC2025ar_best_v1_1.root"  );
+    datasets_["mumem"]      = DatasetInfo_t(1e7       , 4137592, 0.,   1., rate_sig                     , "cele1b1s5r0100", "nts.mu2e.CeMLeadingLogMix1BB.MDC2025au_best_v1_1.root"  );
+    datasets_["mumep"]      = DatasetInfo_t(1e7       , 3235878, 0.,   1., rate_sig                     , "cpos1b1s5r0100", "nts.mu2e.CeMLeadingLogMix1BB.MDC2025ar_best_v1_1.root"  );
     datasets_["cosmic"]     = DatasetInfo_t(t_cry4ab1 , 4152355, 0.,   1.,       1.                     , "cry4ab1s5r0100", "nts.mu2e.CosmicSignalMix1BB.MDC2025ar_best_v1_1.root"   );
     datasets_["dio"]        = DatasetInfo_t(25e6      , 9348862, 0.,   1., rate_dio_95                  , "dio00b1s5r0100", "nts.mu2e.DIOtail95Mix1BB.MDC2025ar_best_v1_1.root"      );
     datasets_["rmc_ext_0n"] = DatasetInfo_t(7000000000, 4952890, 0.,   1., rate_rmc_ps_0n_80            , "rmce0b1s5r0100", "nts.mu2e.RMCPhaseSpace0NExternalMix1BB.MDC2025ar_best_v1_1.root");
@@ -116,6 +117,8 @@ void init_dataset_info() {
     datasets_["rmc_int_1n"] = DatasetInfo_t(  50000000,  507641, 0.,   1., rate_rmc_ps_1n_80*rmc_int_br_, "rmci1b1s5r0100", "nts.mu2e.RMCPhaseSpace1NInternalMix1BB.MDC2025ar_best_v1_1.root");
     datasets_["rpc_ext"]    = DatasetInfo_t(5000000000,  458818, 0.,   1., rate_phys_rpc                , "rpce1b1s5r0100", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
     datasets_["rpc_int"]    = DatasetInfo_t( 125000000, 1899806, 0.,   1., rate_phys_rpc_int            , "rpci1b1s5r0100", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
+    datasets_["rmc_ext"] = datasets_["rmc_ext_0n"]; // For now default to just 0 knockout
+    datasets_["rmc_int"] = datasets_["rmc_int_0n"];
 
     datasets_["data_mds3c"] = DatasetInfo_t(1.    , 4921433, 0.,   1., 1., "mds3cb1s5r0100", "nts.mu2e.ensembleMDS3cMix1BB.MDC2025ar_best_v1_1.root"              );
   }

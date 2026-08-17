@@ -145,7 +145,7 @@ public:
     if(ymin <= ymax) return;
     if(!logy) {
       ymin = 1.e-5*max_val;
-      ymax = 1.3*max_val;
+      ymax = 1.4*max_val;
       return;
     }
 

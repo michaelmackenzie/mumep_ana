@@ -27,6 +27,7 @@ git clone https://github.com/Mu2e/EventNtuple.git
 git clone https://github.com/Mu2e/ArtAnalysis.git
 git clone https://github.com/Mu2e/MLTrain.git
 git clone https://github.com/michaelmackenzie/Mu2eEvtAna.git
+git clone https://github.com/michaelmackenzie/grim.git
 ```
 
 Compile on mu2ebuild02

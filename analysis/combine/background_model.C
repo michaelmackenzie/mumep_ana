@@ -417,8 +417,8 @@ pdf_infos get_background_model(RooRealVar& obs, TString process, const int selec
   if(!use_evtana_) {
     pdfs.push_back(read_model("pbar", process, selection, tag));
   } else {
-    // pdfs.push_back(read_model("rmc_ext", process, selection, tag));
-    // pdfs.push_back(read_model("rmc_int", process, selection, tag));
+    pdfs.push_back(read_model("rmc_ext", process, selection, tag));
+    pdfs.push_back(read_model("rmc_int", process, selection, tag));
   }
 
   return pdfs;
