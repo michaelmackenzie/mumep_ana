@@ -107,11 +107,17 @@ pdf_info read_model(const TString name, const TString process, const int selecti
   TH1* h_raw = (TH1*) f->Get(Form("%s_%i_%s_raw_hist", process.Data(), selection, name.Data()));
   if(h_raw) h_raw->SetDirectory(0);
 
+  TH1* h_normalized = (TH1*) f->Get(Form("%s_%i_%s_normalized_hist", process.Data(), selection, name.Data()));
+  if(h_normalized) h_normalized->SetDirectory(0);
+
   TH1* h_smoothed = (TH1*) f->Get(Form("%s_%i_%s_smoothed_hist", process.Data(), selection, name.Data()));
   if(h_smoothed) h_smoothed->SetDirectory(0);
 
   TH1* h_t0_raw = (TH1*) f->Get(Form("%s_%i_%s_t0_raw_hist", process.Data(), selection, name.Data()));
   if(h_t0_raw) h_t0_raw->SetDirectory(0);
+
+  TH1* h_t0_normalized = (TH1*) f->Get(Form("%s_%i_%s_t0_normalized_hist", process.Data(), selection, name.Data()));
+  if(h_t0_normalized) h_t0_normalized->SetDirectory(0);
 
   TH1* h_t0_smoothed = (TH1*) f->Get(Form("%s_%i_%s_t0_smoothed_hist", process.Data(), selection, name.Data()));
   if(h_t0_smoothed) h_t0_smoothed->SetDirectory(0);
@@ -119,8 +125,10 @@ pdf_info read_model(const TString name, const TString process, const int selecti
   res.pdf_   = pdf;
   res.hist_  = h;
   res.raw_hist_ = h_raw;
+  res.normalized_hist_ = h_normalized;
   res.smoothed_hist_ = h_smoothed;
   res.t0_raw_hist_ = h_t0_raw;
+  res.t0_normalized_hist_ = h_t0_normalized;
   res.t0_smoothed_hist_ = h_t0_smoothed;
   res.obs_   = obs;
   res.norm_  = norm;

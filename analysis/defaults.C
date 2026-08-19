@@ -16,7 +16,7 @@ TString      file_type_   = "hist"; // histogram file extension
 // Fit info
 TString      var_         = "obs"; // Observable name
 double       bin_width_   = 0.2 ;  // Expected bin width, rebin to achieve if possible
-double       t_bin_width_ = 20. ;  // Time distribution bin width
+double       t_bin_width_ =  25.;  // Time distribution bin width
 double       xmin_em_     = 100.;  // Momentum range for mu- --> e- fit
 double       xmax_em_     = 110.;
 double       xmin_ep_     =  87.;  // Momentum range for mu- --> e+ fit

@@ -111,16 +111,16 @@ int fit_component_model(TString process,
 
   TH1* h_orig = h;
   h = trim_hist(h, xmin, xmax);
+  TH1* h_raw_for_ws = (TH1*) h->Clone(Form("%s_raw_for_ws", component.Data()));
   const double scale = (component == "signal")
     ? get_dataset_info(process).norm(npot_*signal_br_)
     : get_dataset_info(dataset_key).norm((dataset_key.BeginsWith("cosmic")) ? livetime_ : npot_);
   h->Scale(scale);
+  TH1* h_normalized_for_ws = (TH1*) h->Clone(Form("%s_normalized_for_ws", component.Data()));
   if(h_control) {
     h_control = trim_hist(h_control, xmin, xmax);
     h_control->Scale(scale);
   }
-
-  TH1* h_raw_for_ws = (TH1*) h->Clone(Form("%s_raw_for_ws", component.Data()));
   bool did_smooth = false;
 
   if(tail_model == "convolution" && component == "dio") {
@@ -169,6 +169,7 @@ int fit_component_model(TString process,
   }
 
   TH1* h_t0_raw_for_ws = nullptr;
+  TH1* h_t0_normalized_for_ws = nullptr;
   TH1* h_t0_smoothed_for_ws = nullptr;
   if(include_t0_) {
     TH1* h_t0 = nullptr;
@@ -190,11 +191,12 @@ int fit_component_model(TString process,
       const int trebin = (t_bin_width_ > 0.) ? int(t_bin_width_/h_t0->GetBinWidth(1) + 1.e-3) : 1;
       if(trebin > 1) h_t0->Rebin(trebin);
 
-      const double target_raw_integral = (h_raw_for_ws) ? h_raw_for_ws->Integral() : h->Integral();
-      const double t0_raw_integral = h_t0->Integral();
-      if(target_raw_integral > 0. && t0_raw_integral > 0.) h_t0->Scale(target_raw_integral / t0_raw_integral);
-
       h_t0_raw_for_ws = (TH1*) h_t0->Clone(Form("%s_t0_raw_for_ws", component.Data()));
+
+      const double target_norm_integral = (h_normalized_for_ws) ? h_normalized_for_ws->Integral() : h->Integral();
+      const double t0_norm_integral = h_t0->Integral();
+      if(target_norm_integral > 0. && t0_norm_integral > 0.) h_t0->Scale(target_norm_integral / t0_norm_integral);
+      h_t0_normalized_for_ws = (TH1*) h_t0->Clone(Form("%s_t0_normalized_for_ws", component.Data()));
 
       TH1* h_t0_fit = (TH1*) h_t0->Clone(Form("%s_t0_smoothed_for_ws", component.Data()));
       const double txmin = h_t0_fit->GetXaxis()->GetBinLowEdge(1);
@@ -209,7 +211,7 @@ int fit_component_model(TString process,
           h_t0_fit->SetBinContent(ibin, val);
           h_t0_fit->SetBinError(ibin, std::sqrt(val));
         }
-        const double target_smoothed_integral = (did_smooth) ? h->Integral() : target_raw_integral;
+        const double target_smoothed_integral = (did_smooth) ? h->Integral() : target_norm_integral;
         const double t0_smoothed_integral = h_t0_fit->Integral();
         if(target_smoothed_integral > 0. && t0_smoothed_integral > 0.) {
           h_t0_fit->Scale(target_smoothed_integral / t0_smoothed_integral);
@@ -333,16 +335,20 @@ int fit_component_model(TString process,
     return save_fit_workspace_with_hist(process, selection, tag, component, pdf, obs, norm,
                                         h,
                                         h_raw_for_ws,
+                                        h_normalized_for_ws,
                                         h_smoothed_for_ws,
                                         h_t0_raw_for_ws,
+                                        h_t0_normalized_for_ws,
                                         h_t0_smoothed_for_ws,
                                         suffix);
   }
   return save_fit_workspace(process, selection, tag, component, component_title, pdf, obs, norm,
                             hist_pdfs_,
                             h_raw_for_ws,
+                            h_normalized_for_ws,
                             h_smoothed_for_ws,
                             h_t0_raw_for_ws,
+                            h_t0_normalized_for_ws,
                             h_t0_smoothed_for_ws,
                             suffix);
 }

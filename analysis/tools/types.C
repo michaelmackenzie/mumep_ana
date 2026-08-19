@@ -5,7 +5,11 @@ struct pdf_info {
   RooAbsPdf* pdf_ = nullptr;
   TH1* hist_ = nullptr;
   TH1* raw_hist_ = nullptr;
+  TH1* normalized_hist_ = nullptr;
   TH1* smoothed_hist_ = nullptr;
+  TH1* t0_raw_hist_ = nullptr;
+  TH1* t0_normalized_hist_ = nullptr;
+  TH1* t0_smoothed_hist_ = nullptr;
   RooRealVar* obs_ = nullptr; //observable variable
   RooRealVar* norm_ = nullptr; //normalization variable
   double rate_ = 0.;

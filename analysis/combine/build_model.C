@@ -236,31 +236,42 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   auto workflow_dir = fcomp->mkdir("workflow");
   auto raw_dir = workflow_dir->mkdir("raw");
+  auto normalized_dir = workflow_dir->mkdir("normalized");
   auto smoothed_dir = workflow_dir->mkdir("smoothed");
 
   auto write_workflow_hist = [&](TH1* h_in,
                                  const TString& out_name,
                                  const TString& out_title,
                                  const double target_rate,
-                                 TDirectory* out_dir) {
+                                 TDirectory* out_dir,
+                                 const bool normalize_to_rate = true) {
     if(!h_in || !out_dir) return;
     TH1* h_out = (TH1*) h_in->Clone(out_name.Data());
     h_out->SetTitle(out_title.Data());
-    const double integral = h_out->Integral();
-    if(integral > 0.) h_out->Scale(target_rate / integral);
+    if(normalize_to_rate) {
+      const double integral = h_out->Integral();
+      if(integral > 0.) h_out->Scale(target_rate / integral);
+    }
     out_dir->cd();
     h_out->Write();
     fcomp->cd();
   };
 
-  write_workflow_hist(signal_model.raw_hist_, "signal", signal_model.title_, signal_model.rate_, raw_dir);
+  write_workflow_hist(signal_model.raw_hist_, "signal", signal_model.title_, signal_model.rate_, raw_dir, false);
+  write_workflow_hist(signal_model.normalized_hist_, "signal", signal_model.title_, signal_model.rate_, normalized_dir);
   write_workflow_hist(signal_model.smoothed_hist_, "signal", signal_model.title_, signal_model.rate_, smoothed_dir);
   if(include_t0_) {
     write_workflow_hist(signal_model.t0_raw_hist_,
                         "signal_t0",
                         Form("%s t0 raw", signal_model.title_.Data()),
                         signal_model.rate_,
-                        raw_dir);
+                        raw_dir,
+                        false);
+    write_workflow_hist(signal_model.t0_normalized_hist_,
+                        "signal_t0",
+                        Form("%s t0 normalized", signal_model.title_.Data()),
+                        signal_model.rate_,
+                        normalized_dir);
     write_workflow_hist(signal_model.t0_smoothed_hist_,
                         "signal_t0_exp",
                         Form("%s t0 exponential fit", signal_model.title_.Data()),
@@ -268,14 +279,21 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
                         smoothed_dir);
   }
   for(auto& bkg : background_model) {
-    write_workflow_hist(bkg.raw_hist_, bkg.name_, bkg.title_, bkg.rate_, raw_dir);
+    write_workflow_hist(bkg.raw_hist_, bkg.name_, bkg.title_, bkg.rate_, raw_dir, false);
+    write_workflow_hist(bkg.normalized_hist_, bkg.name_, bkg.title_, bkg.rate_, normalized_dir);
     write_workflow_hist(bkg.smoothed_hist_, bkg.name_, bkg.title_, bkg.rate_, smoothed_dir);
     if(include_t0_) {
       write_workflow_hist(bkg.t0_raw_hist_,
                           Form("%s_t0", bkg.name_.Data()),
                           Form("%s t0 raw", bkg.title_.Data()),
                           bkg.rate_,
-                          raw_dir);
+                          raw_dir,
+                          false);
+      write_workflow_hist(bkg.t0_normalized_hist_,
+                          Form("%s_t0", bkg.name_.Data()),
+                          Form("%s t0 normalized", bkg.title_.Data()),
+                          bkg.rate_,
+                          normalized_dir);
       write_workflow_hist(bkg.t0_smoothed_hist_,
                           Form("%s_t0_exp", bkg.name_.Data()),
                           Form("%s t0 exponential fit", bkg.title_.Data()),
