@@ -339,6 +339,8 @@ int save_fit_workspace(TString process,
                        RooRealVar& obs,
                        RooRealVar& norm,
                        const bool hist_pdfs,
+                       TH1* raw_hist = nullptr,
+                       TH1* smoothed_hist = nullptr,
                        const TString out_suffix = "") {
   const char* hist_name = Form("%s_%i_%s_hist", process.Data(), selection, component.Data());
   auto h_fit = pdf->createHistogram(hist_name, obs);
@@ -358,8 +360,29 @@ int save_fit_workspace(TString process,
   gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", fitdir, fitdir));
   TFile* fout = new TFile(Form("%s/%s_fit_%i%s.root", fitdir, component.Data(), selection, out_suffix.Data()), "RECREATE");
   RooWorkspace ws("workspace", "workspace");
+
+  auto write_hist_to_workspace = [&](TH1* src,
+                                     const TString& hist_name,
+                                     const TString& data_name,
+                                     const TString& data_title) {
+    if(!src) return;
+    TH1* h_copy = (TH1*) src->Clone(hist_name.Data());
+    h_copy->SetName(hist_name.Data());
+    RooDataHist data(data_name.Data(), data_title.Data(), obs, h_copy);
+    ws.import(data);
+    h_copy->Write();
+  };
+
   ws.import(*pdf);
   ws.import(norm);
+  write_hist_to_workspace(raw_hist,
+                          Form("%s_%i_%s_raw_hist", process.Data(), selection, component.Data()),
+                          Form("%s_%i_%s_raw_data_hist", process.Data(), selection, component.Data()),
+                          Form("%s raw data hist", component_title.Data()));
+  write_hist_to_workspace(smoothed_hist,
+                          Form("%s_%i_%s_smoothed_hist", process.Data(), selection, component.Data()),
+                          Form("%s_%i_%s_smoothed_data_hist", process.Data(), selection, component.Data()),
+                          Form("%s smoothed data hist", component_title.Data()));
   ws.Write();
   h_fit->Write();
   fout->Close();
@@ -376,6 +399,8 @@ int save_fit_workspace_with_hist(TString process,
                                  RooRealVar& obs,
                                  RooRealVar& norm,
                                  TH1* hist,
+                                 TH1* raw_hist = nullptr,
+                                 TH1* smoothed_hist = nullptr,
                                  const TString out_suffix = "") {
   if(!pdf || !hist) return 1;
 
@@ -395,8 +420,29 @@ int save_fit_workspace_with_hist(TString process,
   gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", fitdir, fitdir));
   TFile* fout = new TFile(Form("%s/%s_fit_%i%s.root", fitdir, component.Data(), selection, out_suffix.Data()), "RECREATE");
   RooWorkspace ws("workspace", "workspace");
+
+  auto write_hist_to_workspace = [&](TH1* src,
+                                     const TString& hist_name,
+                                     const TString& data_name,
+                                     const TString& data_title) {
+    if(!src) return;
+    TH1* h_copy = (TH1*) src->Clone(hist_name.Data());
+    h_copy->SetName(hist_name.Data());
+    RooDataHist data(data_name.Data(), data_title.Data(), obs, h_copy);
+    ws.import(data);
+    h_copy->Write();
+  };
+
   ws.import(fit_pdf);
   ws.import(norm);
+  write_hist_to_workspace(raw_hist,
+                          Form("%s_%i_%s_raw_hist", process.Data(), selection, component.Data()),
+                          Form("%s_%i_%s_raw_data_hist", process.Data(), selection, component.Data()),
+                          Form("%s raw data hist", component.Data()));
+  write_hist_to_workspace(smoothed_hist,
+                          Form("%s_%i_%s_smoothed_hist", process.Data(), selection, component.Data()),
+                          Form("%s_%i_%s_smoothed_data_hist", process.Data(), selection, component.Data()),
+                          Form("%s smoothed data hist", component.Data()));
   ws.Write();
   h_fit->Write();
   fout->Close();

@@ -6,6 +6,7 @@ bool         hist_pdfs_   = true ; // Use functions or histograms in the model
 bool         include_sys_ = false; // Evaluate systematics
 bool         use_evtana_  = true ; // Use Mu2eEvtAna inputs (EventNtuple)
 bool         run1a_range_ = false; // Use Run 1A paper range (only in EvtAna mode)
+bool         include_t0_  = true ; // Add t0 histograms to the output
 
 // Histogram file info
 int          hist_mode_   = 2;
@@ -15,6 +16,7 @@ TString      file_type_   = "hist"; // histogram file extension
 // Fit info
 TString      var_         = "obs"; // Observable name
 double       bin_width_   = 0.2 ;  // Expected bin width, rebin to achieve if possible
+double       t_bin_width_ = 20. ;  // Time distribution bin width
 double       xmin_em_     = 100.;  // Momentum range for mu- --> e- fit
 double       xmax_em_     = 110.;
 double       xmin_ep_     =  87.;  // Momentum range for mu- --> e+ fit
@@ -27,7 +29,7 @@ void set_evtana_defaults() {
   include_sys_ = false; // systematics aren't fully implemented
   if(run1a_range_) {
     // xmin_em_ = 97.;
-    bin_width_ = 0.25; // to better match the paper fit
+    bin_width_ = 0.2; // to better match the paper fit
     // bin_width_ = 0.1; // to better match the cut-and-count range
   }
 }

@@ -104,8 +104,16 @@ pdf_info read_model(const TString name, const TString process, const int selecti
   }
   h->SetDirectory(0);
 
+  TH1* h_raw = (TH1*) f->Get(Form("%s_%i_%s_raw_hist", process.Data(), selection, name.Data()));
+  if(h_raw) h_raw->SetDirectory(0);
+
+  TH1* h_smoothed = (TH1*) f->Get(Form("%s_%i_%s_smoothed_hist", process.Data(), selection, name.Data()));
+  if(h_smoothed) h_smoothed->SetDirectory(0);
+
   res.pdf_   = pdf;
   res.hist_  = h;
+  res.raw_hist_ = h_raw;
+  res.smoothed_hist_ = h_smoothed;
   res.obs_   = obs;
   res.norm_  = norm;
   res.rate_  = norm->getVal();

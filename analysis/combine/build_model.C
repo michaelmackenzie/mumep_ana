@@ -233,6 +233,33 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     hbkg_comp->SetTitle(bkg.title_);
     hbkg_comp->Write();
   }
+
+  auto workflow_dir = fcomp->mkdir("workflow");
+  auto raw_dir = workflow_dir->mkdir("raw");
+  auto smoothed_dir = workflow_dir->mkdir("smoothed");
+
+  auto write_workflow_hist = [&](TH1* h_in,
+                                 const TString& out_name,
+                                 const TString& out_title,
+                                 const double target_rate,
+                                 TDirectory* out_dir) {
+    if(!h_in || !out_dir) return;
+    TH1* h_out = (TH1*) h_in->Clone(out_name.Data());
+    h_out->SetTitle(out_title.Data());
+    const double integral = h_out->Integral();
+    if(integral > 0.) h_out->Scale(target_rate / integral);
+    out_dir->cd();
+    h_out->Write();
+    fcomp->cd();
+  };
+
+  write_workflow_hist(signal_model.raw_hist_, "signal", signal_model.title_, signal_model.rate_, raw_dir);
+  write_workflow_hist(signal_model.smoothed_hist_, "signal", signal_model.title_, signal_model.rate_, smoothed_dir);
+  for(auto& bkg : background_model) {
+    write_workflow_hist(bkg.raw_hist_, bkg.name_, bkg.title_, bkg.rate_, raw_dir);
+    write_workflow_hist(bkg.smoothed_hist_, bkg.name_, bkg.title_, bkg.rate_, smoothed_dir);
+  }
+
   fcomp->cd();
   TH1* hrmue_comp = new TH1F("rmue", "R_{#mue}", 1, 0., 1.);
   hrmue_comp->Fill(0.5, signal_br_);

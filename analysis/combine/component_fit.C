@@ -23,7 +23,7 @@ RooAbsPdf* component_analytic_pdf(const TString& component,
   TString c = component;
   c.ToLower();
   if(c == "signal")  return get_signal_model (obs, process, selection, false).pdf_;
-  if(c == "dio")     return get_dio_model    (obs, process, selection,  true).pdf_;
+  if(c == "dio")     return get_dio_model    (obs, process, selection, false).pdf_;
   if(c == "cosmic")  return get_cosmic_model (obs, process, selection, false).pdf_;
   if(c == "pbar")    return get_pbar_model   (obs, process, selection, false).pdf_;
   if(c == "rpc_ext") return get_rpc_ext_model(obs, process, selection, false).pdf_;
@@ -52,14 +52,14 @@ void get_tail_defaults(const TString& component,
   } else if(c == "dio") {
     fit_xmin = 102.0;
     init_params = {473., -5.};
-  } else if(c == "rmc_ext") {
-    fit_xmin = 99.5;
-    nsmooth = 1;
-    init_params = {473., -4.6};
-  } else if(c == "rmc_int") {
-    fit_xmin = 99.5;
-    nsmooth = 1;
-    init_params = {473., -4.6};
+  // } else if(c == "rmc_ext") {
+  //   fit_xmin = 99.5;
+  //   nsmooth = 0;
+  //   init_params = {473., -4.6};
+  // } else if(c == "rmc_int") {
+  //   fit_xmin = 99.5;
+  //   nsmooth = 0;
+  //   init_params = {473., -4.6};
   }
 }
 
@@ -120,6 +120,9 @@ int fit_component_model(TString process,
     h_control->Scale(scale);
   }
 
+  TH1* h_raw_for_ws = (TH1*) h->Clone(Form("%s_raw_for_ws", component.Data()));
+  bool did_smooth = false;
+
   if(tail_model == "convolution" && component == "dio") {
     const int conv_set = 10;
     TH1* theory = get_background_hist("dio", conv_set, "dio_fit", -1, "MC_GenE");
@@ -141,6 +144,7 @@ int fit_component_model(TString process,
       c.SaveAs(Form("%s/%s_smoothing_%i%s.png", figdir.Data(), component.Data(), selection,
                     (isys > 0) ? Form("_sys_%i", isys) : ""));
       smooth_tail_from_reference(h, convolution, 102.0, xmax, 0.2);
+      did_smooth = true;
     }
   } else if(tail_model != "none") {
     double fit_xmin(-1.);
@@ -148,17 +152,19 @@ int fit_component_model(TString process,
     std::vector<double> init_params;
     get_tail_defaults(component, process, fit_xmin, nsmooth, init_params);
     if(fit_xmin > 0.) {
-      smooth_right_tail(h,
-                        h_orig,
-                        Form("%s/%s_smoothing_%i%s.png", figdir.Data(), component.Data(), selection,
-                             (isys > 0) ? Form("_sys_%i", isys) : ""),
-                        tail_model,
-                        fit_xmin,
-                        xmax,
-                        nsmooth,
-                        0.2,
-                        false,
-                        init_params);
+       if(smooth_right_tail(h,
+                h_orig,
+                Form("%s/%s_smoothing_%i%s.png", figdir.Data(), component.Data(), selection,
+                  (isys > 0) ? Form("_sys_%i", isys) : ""),
+                tail_model,
+                fit_xmin,
+                xmax,
+                nsmooth,
+                0.2,
+                false,
+                init_params) == 0) {
+         did_smooth = true;
+       }
     }
   }
 
@@ -269,10 +275,13 @@ int fit_component_model(TString process,
   }
 
   const TString suffix = (isys < 0) ? "" : Form("_sys_%i", isys);
+  TH1* h_smoothed_for_ws = did_smooth ? h : nullptr;
   if(component == "signal" || component == "dio") {
-    return save_fit_workspace_with_hist(process, selection, tag, component, pdf, obs, norm, h, suffix);
+    return save_fit_workspace_with_hist(process, selection, tag, component, pdf, obs, norm,
+                                        h, h_raw_for_ws, h_smoothed_for_ws, suffix);
   }
-  return save_fit_workspace(process, selection, tag, component, component_title, pdf, obs, norm, hist_pdfs_, suffix);
+  return save_fit_workspace(process, selection, tag, component, component_title, pdf, obs, norm,
+                            hist_pdfs_, h_raw_for_ws, h_smoothed_for_ws, suffix);
 }
 
 #endif
