@@ -76,7 +76,7 @@ Combine is not built with muse/Offline, and requires python libraries not in the
 Instead, pyenv rootana is used with Combine, without setting up a muse/Offline environment.
 
 ```bash
-cd HiggsAnalysis/CombinedLimit/
+cd combine/HiggsAnalysis/CombinedLimit/
 mu2einit
 pyenv rootana 2.5.0
 source env_standalone_mu2e.sh
