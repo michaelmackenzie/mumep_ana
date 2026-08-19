@@ -168,6 +168,59 @@ int fit_component_model(TString process,
     }
   }
 
+  TH1* h_t0_raw_for_ws = nullptr;
+  TH1* h_t0_smoothed_for_ws = nullptr;
+  if(include_t0_) {
+    TH1* h_t0 = nullptr;
+    if(shape_sets.empty()) {
+      h_t0 = load_component_hist_from_dataset(dataset_key,
+                                              selection,
+                                              Form("%s_fit_t0", component.Data()),
+                                              isys,
+                                              "t0");
+    } else {
+      h_t0 = load_component_hist_from_sets(dataset_key,
+                                           shape_sets,
+                                           Form("%s_fit_t0_shape", component.Data()),
+                                           isys,
+                                           "t0");
+    }
+
+    if(h_t0) {
+      const int trebin = (t_bin_width_ > 0.) ? int(t_bin_width_/h_t0->GetBinWidth(1) + 1.e-3) : 1;
+      if(trebin > 1) h_t0->Rebin(trebin);
+
+      const double target_raw_integral = (h_raw_for_ws) ? h_raw_for_ws->Integral() : h->Integral();
+      const double t0_raw_integral = h_t0->Integral();
+      if(target_raw_integral > 0. && t0_raw_integral > 0.) h_t0->Scale(target_raw_integral / t0_raw_integral);
+
+      h_t0_raw_for_ws = (TH1*) h_t0->Clone(Form("%s_t0_raw_for_ws", component.Data()));
+
+      TH1* h_t0_fit = (TH1*) h_t0->Clone(Form("%s_t0_smoothed_for_ws", component.Data()));
+      const double txmin = h_t0_fit->GetXaxis()->GetBinLowEdge(1);
+      const double txmax = h_t0_fit->GetXaxis()->GetBinUpEdge(h_t0_fit->GetNbinsX());
+      TF1 t0_exp_fit(Form("%s_t0_exp_fit", component.Data()), "exp([0] + [1]*x)", txmin, txmax);
+      t0_exp_fit.SetParameters(std::log(std::max(1.e-9, h_t0_fit->GetMaximum())), -1.e-3);
+      const int fit_status = h_t0->Fit(&t0_exp_fit, "Q0R");
+      if(fit_status == 0) {
+        for(int ibin = 1; ibin <= h_t0_fit->GetNbinsX(); ++ibin) {
+          const double x = h_t0_fit->GetBinCenter(ibin);
+          const double val = std::max(0., t0_exp_fit.Eval(x));
+          h_t0_fit->SetBinContent(ibin, val);
+          h_t0_fit->SetBinError(ibin, std::sqrt(val));
+        }
+        const double target_smoothed_integral = (did_smooth) ? h->Integral() : target_raw_integral;
+        const double t0_smoothed_integral = h_t0_fit->Integral();
+        if(target_smoothed_integral > 0. && t0_smoothed_integral > 0.) {
+          h_t0_fit->Scale(target_smoothed_integral / t0_smoothed_integral);
+        }
+        h_t0_smoothed_for_ws = h_t0_fit;
+      } else {
+        delete h_t0_fit;
+      }
+    }
+  }
+
   RooRealVar obs(Form("obs_%i", selection), "p", (xmin+xmax)/2., xmin, xmax, "MeV/c");
   obs.setBins(h->FindBin(xmax-1.e-6) - h->FindBin(xmin+1.e-6) + 1);
 
@@ -278,10 +331,20 @@ int fit_component_model(TString process,
   TH1* h_smoothed_for_ws = did_smooth ? h : nullptr;
   if(component == "signal" || component == "dio") {
     return save_fit_workspace_with_hist(process, selection, tag, component, pdf, obs, norm,
-                                        h, h_raw_for_ws, h_smoothed_for_ws, suffix);
+                                        h,
+                                        h_raw_for_ws,
+                                        h_smoothed_for_ws,
+                                        h_t0_raw_for_ws,
+                                        h_t0_smoothed_for_ws,
+                                        suffix);
   }
   return save_fit_workspace(process, selection, tag, component, component_title, pdf, obs, norm,
-                            hist_pdfs_, h_raw_for_ws, h_smoothed_for_ws, suffix);
+                            hist_pdfs_,
+                            h_raw_for_ws,
+                            h_smoothed_for_ws,
+                            h_t0_raw_for_ws,
+                            h_t0_smoothed_for_ws,
+                            suffix);
 }
 
 #endif

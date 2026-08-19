@@ -341,6 +341,8 @@ int save_fit_workspace(TString process,
                        const bool hist_pdfs,
                        TH1* raw_hist = nullptr,
                        TH1* smoothed_hist = nullptr,
+                       TH1* t0_raw_hist = nullptr,
+                       TH1* t0_smoothed_hist = nullptr,
                        const TString out_suffix = "") {
   const char* hist_name = Form("%s_%i_%s_hist", process.Data(), selection, component.Data());
   auto h_fit = pdf->createHistogram(hist_name, obs);
@@ -383,6 +385,14 @@ int save_fit_workspace(TString process,
                           Form("%s_%i_%s_smoothed_hist", process.Data(), selection, component.Data()),
                           Form("%s_%i_%s_smoothed_data_hist", process.Data(), selection, component.Data()),
                           Form("%s smoothed data hist", component_title.Data()));
+  write_hist_to_workspace(t0_raw_hist,
+                          Form("%s_%i_%s_t0_raw_hist", process.Data(), selection, component.Data()),
+                          Form("%s_%i_%s_t0_raw_data_hist", process.Data(), selection, component.Data()),
+                          Form("%s t0 raw data hist", component_title.Data()));
+  write_hist_to_workspace(t0_smoothed_hist,
+                          Form("%s_%i_%s_t0_smoothed_hist", process.Data(), selection, component.Data()),
+                          Form("%s_%i_%s_t0_smoothed_data_hist", process.Data(), selection, component.Data()),
+                          Form("%s t0 smoothed data hist", component_title.Data()));
   ws.Write();
   h_fit->Write();
   fout->Close();
@@ -401,6 +411,8 @@ int save_fit_workspace_with_hist(TString process,
                                  TH1* hist,
                                  TH1* raw_hist = nullptr,
                                  TH1* smoothed_hist = nullptr,
+                                 TH1* t0_raw_hist = nullptr,
+                                 TH1* t0_smoothed_hist = nullptr,
                                  const TString out_suffix = "") {
   if(!pdf || !hist) return 1;
 
@@ -443,6 +455,14 @@ int save_fit_workspace_with_hist(TString process,
                           Form("%s_%i_%s_smoothed_hist", process.Data(), selection, component.Data()),
                           Form("%s_%i_%s_smoothed_data_hist", process.Data(), selection, component.Data()),
                           Form("%s smoothed data hist", component.Data()));
+  write_hist_to_workspace(t0_raw_hist,
+                          Form("%s_%i_%s_t0_raw_hist", process.Data(), selection, component.Data()),
+                          Form("%s_%i_%s_t0_raw_data_hist", process.Data(), selection, component.Data()),
+                          Form("%s t0 raw data hist", component.Data()));
+  write_hist_to_workspace(t0_smoothed_hist,
+                          Form("%s_%i_%s_t0_smoothed_hist", process.Data(), selection, component.Data()),
+                          Form("%s_%i_%s_t0_smoothed_data_hist", process.Data(), selection, component.Data()),
+                          Form("%s t0 smoothed data hist", component.Data()));
   ws.Write();
   h_fit->Write();
   fout->Close();

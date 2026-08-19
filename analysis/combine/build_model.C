@@ -255,9 +255,33 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   write_workflow_hist(signal_model.raw_hist_, "signal", signal_model.title_, signal_model.rate_, raw_dir);
   write_workflow_hist(signal_model.smoothed_hist_, "signal", signal_model.title_, signal_model.rate_, smoothed_dir);
+  if(include_t0_) {
+    write_workflow_hist(signal_model.t0_raw_hist_,
+                        "signal_t0",
+                        Form("%s t0 raw", signal_model.title_.Data()),
+                        signal_model.rate_,
+                        raw_dir);
+    write_workflow_hist(signal_model.t0_smoothed_hist_,
+                        "signal_t0_exp",
+                        Form("%s t0 exponential fit", signal_model.title_.Data()),
+                        signal_model.rate_,
+                        smoothed_dir);
+  }
   for(auto& bkg : background_model) {
     write_workflow_hist(bkg.raw_hist_, bkg.name_, bkg.title_, bkg.rate_, raw_dir);
     write_workflow_hist(bkg.smoothed_hist_, bkg.name_, bkg.title_, bkg.rate_, smoothed_dir);
+    if(include_t0_) {
+      write_workflow_hist(bkg.t0_raw_hist_,
+                          Form("%s_t0", bkg.name_.Data()),
+                          Form("%s t0 raw", bkg.title_.Data()),
+                          bkg.rate_,
+                          raw_dir);
+      write_workflow_hist(bkg.t0_smoothed_hist_,
+                          Form("%s_t0_exp", bkg.name_.Data()),
+                          Form("%s t0 exponential fit", bkg.title_.Data()),
+                          bkg.rate_,
+                          smoothed_dir);
+    }
   }
 
   fcomp->cd();
