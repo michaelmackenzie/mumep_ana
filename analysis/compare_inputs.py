@@ -3,7 +3,7 @@
 
 Usage example:
   python compare_inputs.py \
-	--file1 comp_a.root --hist1 workflow/raw/signal --rate1 2.31 \
+	--file1 comp_a.root --hist1 workflow/raw/signal --rate-hist1 rates/signal \
 	--file2 comp_b.root --hist2 workflow/raw/signal --rate2 2.29 \
 	--output compare_signal.png
 """
@@ -36,6 +36,45 @@ def _open_hist(root_path: str, hist_path: str) -> ROOT.TH1:
 	hist_copy.SetDirectory(0)
 	root_file.Close()
 	return hist_copy
+
+
+def _read_rate_from_hist(root_path: str, hist_path: str) -> float:
+	root_file = ROOT.TFile.Open(root_path, "READ")
+	if not root_file or root_file.IsZombie():
+		raise RuntimeError(f"Unable to open ROOT file: {root_path}")
+
+	rate_obj = root_file.Get(hist_path)
+	if not rate_obj:
+		raise RuntimeError(f"Unable to retrieve rate histogram '{hist_path}' from '{root_path}'")
+	if not rate_obj.InheritsFrom("TH1"):
+		raise RuntimeError(f"Object '{hist_path}' in '{root_path}' is not a TH1")
+
+	rate_hist = rate_obj
+	if rate_hist.GetNbinsX() == 1:
+		rate = float(rate_hist.GetBinContent(1))
+	else:
+		rate = float(rate_hist.Integral())
+
+	root_file.Close()
+	return rate
+
+
+def _resolve_rate(
+	input_name: str,
+	root_path: str,
+	rate_value: float | None,
+	rate_hist_path: str | None,
+) -> float:
+	if rate_value is not None:
+		# print(f"Using explicit expected rate for {input_name}: {rate_value:.8g}")
+		return float(rate_value)
+
+	if rate_hist_path:
+		rate = _read_rate_from_hist(root_path, rate_hist_path)
+		# print(f"Using expected rate from histogram for {input_name}: {rate:.8g} ({rate_hist_path})")
+		return rate
+
+	raise RuntimeError(f"No expected rate source provided for {input_name}")
 
 
 def _can_rebin_to_match(h_fine: ROOT.TH1, h_coarse: ROOT.TH1, rel_tol: float = 1e-6) -> int:
@@ -200,10 +239,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 	parser = argparse.ArgumentParser(description="Compare two TH1 histograms from ROOT files")
 	parser.add_argument("--file1", required=True, help="ROOT file for input 1")
 	parser.add_argument("--hist1", required=True, help="TH1 path in file1")
-	parser.add_argument("--rate1", required=True, type=float, help="Expected overall rate for input 1")
 	parser.add_argument("--file2", required=True, help="ROOT file for input 2")
 	parser.add_argument("--hist2", required=True, help="TH1 path in file2")
-	parser.add_argument("--rate2", required=True, type=float, help="Expected overall rate for input 2")
+
+	group1 = parser.add_mutually_exclusive_group(required=True)
+	group1.add_argument("--rate1", type=float, help="Explicit expected overall rate for input 1")
+	group1.add_argument("--rate-hist1", help="TH1 path in file1 to derive expected overall rate")
+
+	group2 = parser.add_mutually_exclusive_group(required=True)
+	group2.add_argument("--rate2", type=float, help="Explicit expected overall rate for input 2")
+	group2.add_argument("--rate-hist2", help="TH1 path in file2 to derive expected overall rate")
+
 	parser.add_argument("--label1", default="Input 1", help="Legend label for input 1")
 	parser.add_argument("--label2", default="Input 2", help="Legend label for input 2")
 	parser.add_argument("--title", default="Histogram Comparison", help="Plot title")
@@ -223,19 +269,20 @@ def main(argv: list[str] | None = None) -> int:
 	try:
 		h1 = _open_hist(args.file1, args.hist1)
 		h2 = _open_hist(args.file2, args.hist2)
+		rate1 = _resolve_rate("input 1", args.file1, args.rate1, args.rate_hist1)
+		rate2 = _resolve_rate("input 2", args.file2, args.rate2, args.rate_hist2)
 	except RuntimeError as exc:
 		print(f"ERROR: {exc}")
 		return 2
 
 	h1_cmp, h2_cmp, rebin_message = _try_match_binning(h1, h2)
-	print(rebin_message)
+	if 'already' not in rebin_message: print(rebin_message)
 
 	int1 = h1_cmp.Integral()
 	int2 = h2_cmp.Integral()
-	_print_mismatch_warnings(int1, int2, args.rate1, args.rate2, args.warn_threshold)
+	_print_mismatch_warnings(int1, int2, rate1, rate2, args.warn_threshold)
 
 	_make_plot(h1_cmp, h2_cmp, args.label1, args.label2, args.output, args.title)
-	print(f"Wrote comparison plot: {args.output}")
 	return 0
 
 

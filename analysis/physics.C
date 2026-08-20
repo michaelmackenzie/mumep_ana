@@ -7,7 +7,7 @@
 
 // General configurations
 
-double duty_cycle_1bb_         = 0.322; // taken from https://github.com/Mu2e/Production/blob/main/JobConfig/ensemble/python/normalizations.py
+double duty_cycle_1bb_         = 0.323; // taken from https://github.com/Mu2e/Production/blob/main/JobConfig/ensemble/python/normalizations.py
 double duty_cycle_2bb_         = 0.246;
 double npot_event_1bb_         = 1.58e7; // average values
 double npot_event_2bb_         = 3.93e7;
