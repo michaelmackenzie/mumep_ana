@@ -24,7 +24,6 @@ for CARD in $CARDS; do
     COMMAND="combine -d datacards/combine_total_mumem_${CARD}_cc.txt ${ARGS} ${FREEZE}"
     echo ${COMMAND}
     ${COMMAND}
-    break
 done
 
 echo "Done."

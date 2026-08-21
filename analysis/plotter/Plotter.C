@@ -542,7 +542,7 @@ public:
     TLegend* leg = new TLegend(pad1->GetLeftMargin()+0.03, 1. - pad1->GetTopMargin()-0.25, 1.-pad1->GetRightMargin()-0.02, 1. - pad1->GetTopMargin()-0.06);
     leg->SetNColumns(legend_columns_);
     leg->SetLineWidth(0); leg->SetLineColor(0); leg->SetFillColor(0); leg->SetFillStyle(0);
-    leg->SetTextSize(0.04);
+    leg->SetTextSize(0.045);
     leg->SetTextFont(132);
     if(data) leg->AddEntry(data, "Data", "PL");
     for(auto signal : signals) {
@@ -832,7 +832,7 @@ public:
     TLegend* leg = new TLegend(pad1->GetLeftMargin()+0.03, 1. - pad1->GetTopMargin()-0.21, 1.-pad1->GetRightMargin()-0.02, 1. - pad1->GetTopMargin()-0.03);
     leg->SetNColumns(legend_columns_);
     leg->SetLineWidth(0); leg->SetLineColor(0); leg->SetFillColor(0); leg->SetFillStyle(0);
-    leg->SetTextSize(0.04);
+    leg->SetTextSize(0.045);
     leg->SetTextFont(132);
     if(data) leg->AddEntry(data, "Data", "PL");
     for(auto signal : signals) {
