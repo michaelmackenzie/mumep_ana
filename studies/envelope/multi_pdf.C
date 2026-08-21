@@ -83,6 +83,12 @@ int multi_pdf() {
 
   RooDataHist bkg_data("bkg_data", "Toy blinded background", RooArgList(e_pos), h_bkg);
 
+  double n_sideband = 0.;
+  for(int ibin = 1; ibin <= h_bkg->GetNbinsX(); ++ibin) {
+    const double center = h_bkg->GetBinCenter(ibin);
+    if(center < blind_low || center > blind_high) n_sideband += h_bkg->GetBinContent(ibin);
+  }
+
   // Configure envelope families.
   use_exp_family_ = true;
   use_power_family_ = true;
@@ -93,10 +99,10 @@ int multi_pdf() {
   use_fast_bernstein_ = false;
   force_fit_order_ = false;
   test_single_function_ = false;
-  add_all_fits_ = true;
+  add_all_fits_ = false;
 
   RooCategory pdf_index("pdf_index", "pdf index");
-  RooMultiPdf* envelope = create_envelope(e_pos, pdf_index, bkg_data, true, "toy_env", 0);
+  RooMultiPdf* envelope = create_envelope(e_pos, pdf_index, bkg_data, true, "toy_env", 2);
   if(!envelope) {
     printf("%s: Failed to construct envelope.\n", __func__);
     delete h_bkg;
@@ -117,7 +123,9 @@ int multi_pdf() {
   for(int i = 0; i < npdfs; ++i) {
     pdf_index.setIndex(i);
     TString obj_name = Form("pdf_%i", i);
-    envelope->plotOn(frame, Name(obj_name), LineColor(colors[i % ncolors]), LineWidth(2));
+    envelope->plotOn(frame, Name(obj_name), LineColor(colors[i % ncolors]), LineWidth(2),
+                     NormRange("LowSideband,HighSideband"),
+                     Normalization(n_sideband, RooAbsReal::NumEvent));
   }
 
   frame->GetXaxis()->SetTitle("Positron momentum [MeV/c]");

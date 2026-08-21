@@ -16,7 +16,7 @@ bool use_fast_bernstein_    = false;
 
 bool force_fit_order_       = true ; //force only the inclusion of fixed orders of each family
 bool force_best_fit_        = false; //force the nominal PDF to be a specific function
-bool enforce_ftest_         = false; //once a function fails the F-test, stop adding functions
+bool enforce_ftest_         = true ; //once a function fails the F-test, stop adding functions
 bool add_all_fits_          = false; //add all fits, even if they fail
 
 bool test_single_function_  = false; //only pass 1 function into the PDF ensemble
@@ -82,9 +82,9 @@ bool perform_chisq_test(double chisq, int ndof, double* p_val = nullptr) {
 //----------------------------------------------------------------------------------------------------------------
 //Get the chi-squared between a model and data from the model
 double get_hist_chisquare(TH1* model, TH1* data, int* nbins = nullptr) {
-  if(model->GetNbinsX() != model->GetNbinsX()) {
+  if(model->GetNbinsX() != data->GetNbinsX()) {
     cout << __func__ << ": Model and data don't have the same number of bins ("
-         << model->GetNbinsX() << " vs " << model->GetNbinsX() << ")!\n";
+         << model->GetNbinsX() << " vs " << data->GetNbinsX() << ")!\n";
     return -1.;
   }
 
@@ -118,8 +118,9 @@ double get_hist_chisquare(TH1* model, TH1* data, int* nbins = nullptr) {
 double get_manual_subrange_chisquare(RooRealVar& obs, RooAbsPdf* pdf, RooDataHist& data, const char* range = nullptr,
                                      const char* norm_range = nullptr, bool norm_skip = true, int* nbins = nullptr) {
   if(!pdf) return 0.;
-  TH1* htmp_pdf  = pdf->createHistogram("htmp_chisq_pdf" , obs);
-  TH1* htmp_data = data.createHistogram("htmp_chisq_data", obs);
+  const int nhist_bins = data.numEntries();
+  TH1* htmp_pdf  = pdf->createHistogram("htmp_chisq_pdf" , obs, RooFit::Binning(nhist_bins, obs.getMin(), obs.getMax()));
+  TH1* htmp_data = data.createHistogram("htmp_chisq_data", obs, RooFit::Binning(nhist_bins, obs.getMin(), obs.getMax()));
   if(htmp_pdf->GetNbinsX() != htmp_data->GetNbinsX()) {
     cout << __func__ << ": PDF and data don't have the same number of bins ("
          << htmp_pdf->GetNbinsX() << " vs " << htmp_data->GetNbinsX() << ")!\n";
@@ -136,7 +137,8 @@ double get_manual_subrange_chisquare(RooRealVar& obs, RooAbsPdf* pdf, RooDataHis
   double pdf_norm = 0.;
   double data_norm = 0.;
   for(int ibin = 1; ibin <= htmp_data->GetNbinsX(); ++ibin) {
-    bool in_norm = ibin >= bin_norm_lo && ibin <= bin_norm_hi;
+    const double x_center = htmp_data->GetBinCenter(ibin);
+    bool in_norm = (xmin_norm < xmax_norm) ? (x_center > xmin_norm && x_center < xmax_norm) : (ibin >= bin_norm_lo && ibin <= bin_norm_hi);
     if(norm_skip && in_norm) continue; //if given a range to skip
     if(!norm_skip && !in_norm) continue; //if given a range for normalizing
     const double npdf = htmp_pdf->GetBinContent(ibin)*htmp_pdf->GetBinWidth(ibin); //expected N(events)
@@ -166,9 +168,10 @@ double get_manual_subrange_chisquare(RooRealVar& obs, RooAbsPdf* pdf, RooDataHis
   const double xmax = obs.getMax(range);
 
   double chisq = 0.;
-  const int bin_lo = max(1, htmp_data->GetXaxis()->FindBin(xmin));
-  const int bin_hi = min(htmp_data->GetNbinsX(), htmp_data->GetXaxis()->FindBin(xmax));
-  for(int ibin = bin_lo; ibin <= bin_hi; ++ibin) {
+  int n_used_bins = 0;
+  for(int ibin = 1; ibin <= htmp_data->GetNbinsX(); ++ibin) {
+    const double x_center = htmp_data->GetBinCenter(ibin);
+    if(x_center <= xmin || x_center >= xmax) continue;
     const double x_data = htmp_data->GetBinCenter(ibin);
     const double x_pdf  = htmp_pdf ->GetBinCenter(ibin);
     if(x_data != x_pdf) {
@@ -180,6 +183,7 @@ double get_manual_subrange_chisquare(RooRealVar& obs, RooAbsPdf* pdf, RooDataHis
     const double val   = ndata - npdf;
     const double sigma = val*val / ((useDataBinErrors_) ? error*error : (npdf <= 0. ? 1.e-5 : npdf));
     chisq += sigma;
+    ++n_used_bins;
     if(verbose_ > 2) {
       cout << "Bin " << ibin << " (" << htmp_data->GetBinLowEdge(ibin) << " - "
            << htmp_data->GetBinLowEdge(ibin) + htmp_data->GetBinWidth(ibin) << "): Data = " << ndata << " PDF = " << npdf
@@ -187,8 +191,8 @@ double get_manual_subrange_chisquare(RooRealVar& obs, RooAbsPdf* pdf, RooDataHis
     }
   }
 
-  if(verbose_ > 1) cout << __func__ << ": Total chi^2 = " << chisq << " / " << bin_hi - bin_lo+1 << " bins\n";
-  if(nbins) *nbins = bin_hi - bin_lo+1;
+  if(verbose_ > 1) cout << __func__ << ": Total chi^2 = " << chisq << " / " << n_used_bins << " bins\n";
+  if(nbins) *nbins = n_used_bins;
   delete htmp_pdf;
   delete htmp_data;
   return chisq;
@@ -245,7 +249,8 @@ RooAbsPdf* wrap_pdf(RooAbsPdf* pdf, double norm) {
 // Fit a PDF to the dataset and determine whether or not to accept it
 fit_res_t fit_pdf_to_data(RooAbsPdf* pdf, RooDataHist& data, RooRealVar& obs, bool useSideBands, int verbose = 0) {
   if(useSideBands)
-    pdf->fitTo(data, RooFit::PrintLevel(-1 + max(0, verbose-2)), RooFit::Warnings(0), RooFit::PrintEvalErrors(-1), RooFit::Range("LowSideband,HighSideband"));
+    pdf->fitTo(data, RooFit::PrintLevel(-1 + max(0, verbose-2)), RooFit::Warnings(0), RooFit::PrintEvalErrors(-1),
+               RooFit::Range("LowSideband,HighSideband"), RooFit::NormRange("LowSideband,HighSideband"));
   else
     pdf->fitTo(data, RooFit::PrintLevel(-1 + max(0, verbose-2)), RooFit::Warnings(0), RooFit::PrintEvalErrors(-1));
   int nentries = data.numEntries(); //non-constant, as this is updated in the chi^2 calculation based on region used
@@ -267,21 +272,36 @@ std::pair<int,double> add_exponentials(RooDataHist& data, RooRealVar& obs, RooAr
   const int max_order = 3;
   double min_chi = 1.e10;
   int min_index = -1;
+  double prev_chi = -1.;
+  int prev_ndof = -1;
+  bool has_prev = false;
   for(int order = 1; order <= max_order; ++order) {
     RooAbsPdf* basePdf = create_exponential(obs, order, name);
     RooAbsPdf* pdf = wrap_pdf(basePdf, data.sumEntries());
     auto res = fit_pdf_to_data(pdf, data, obs, useSideBands, verbose);
-    const bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 2);
+    bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 2);
+    bool stop_orders = false;
+    if(enforce_ftest_ && !add_all_fits_ && has_prev) {
+      const bool pass_ftest = perform_f_test(prev_chi, prev_ndof, res.chi_sq_, res.ndof_);
+      if(!pass_ftest) {
+        accept = false;
+        stop_orders = true;
+      }
+    }
     if(accept) {
       list.add(*basePdf);
     } else {
       delete pdf;
     }
+    has_prev = true;
+    prev_chi = res.chi_sq_;
+    prev_ndof = res.ndof_;
     if(res.chi_sq_ < min_chi) {min_chi = res.chi_sq_; min_index = list.getSize() - 1;}
     if(verbose > 1) cout << "######################\n"
                          << "### Exponential order " << order << " has chisq = " << res.chi_sq_ << " / " << res.ndof_ << " = " << res.chi_sq_per_dof_
                          << " (p = " << res.p_ << ")" << endl
                          << "######################\n";
+    if(stop_orders) break;
   }
   return std::pair<int, double>(min_index, min_chi);
 }
@@ -291,21 +311,36 @@ std::pair<int,double> add_powerlaws(RooDataHist& data, RooRealVar& obs, RooArgLi
   const int max_order = 3;
   double min_chi = 1.e10;
   int min_index = -1;
+  double prev_chi = -1.;
+  int prev_ndof = -1;
+  bool has_prev = false;
   for(int order = 1; order <= max_order; ++order) {
     RooAbsPdf* basePdf = create_powerlaw(obs, order, name);
     RooAbsPdf* pdf = wrap_pdf(basePdf, data.sumEntries());
     auto res = fit_pdf_to_data(pdf, data, obs, useSideBands, verbose);
-    const bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 2);
+    bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 2);
+    bool stop_orders = false;
+    if(enforce_ftest_ && !add_all_fits_ && has_prev) {
+      const bool pass_ftest = perform_f_test(prev_chi, prev_ndof, res.chi_sq_, res.ndof_);
+      if(!pass_ftest) {
+        accept = false;
+        stop_orders = true;
+      }
+    }
     if(accept) {
       list.add(*basePdf);
     } else {
       delete pdf;
     }
+    has_prev = true;
+    prev_chi = res.chi_sq_;
+    prev_ndof = res.ndof_;
     if(res.chi_sq_ < min_chi) {min_chi = res.chi_sq_; min_index = list.getSize() - 1;}
     if(verbose > 1) cout << "######################\n"
                          << "### Power law order " << order << " has chisq = " << res.chi_sq_ << " / " << res.ndof_ << " = " << res.chi_sq_per_dof_
                          << " (p = " << res.p_ << ")" << endl
                          << "######################\n";
+    if(stop_orders) break;
   }
   return std::pair<int, double>(min_index, min_chi);
 }
@@ -315,21 +350,36 @@ std::pair<int,double> add_laurents(RooDataHist& data, RooRealVar& obs, RooArgLis
   const int max_order = 6;
   double min_chi = 1.e10;
   int min_index = -1;
+  double prev_chi = -1.;
+  int prev_ndof = -1;
+  bool has_prev = false;
   for(int order = 1; order <= max_order; ++order) {
     RooAbsPdf* basePdf = create_laurent(obs, order, name);
     RooAbsPdf* pdf = wrap_pdf(basePdf, data.sumEntries());
     auto res = fit_pdf_to_data(pdf, data, obs, useSideBands, verbose);
-    const bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 1);
+    bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 1);
+    bool stop_orders = false;
+    if(enforce_ftest_ && !add_all_fits_ && has_prev) {
+      const bool pass_ftest = perform_f_test(prev_chi, prev_ndof, res.chi_sq_, res.ndof_);
+      if(!pass_ftest) {
+        accept = false;
+        stop_orders = true;
+      }
+    }
     if(accept) {
       list.add(*basePdf);
     } else {
       delete pdf;
     }
+    has_prev = true;
+    prev_chi = res.chi_sq_;
+    prev_ndof = res.ndof_;
     if(res.chi_sq_ < min_chi) {min_chi = res.chi_sq_; min_index = list.getSize() - 1;}
     if(verbose > 1) cout << "######################\n"
                          << "### Laurent order " << order << " has chisq = " << res.chi_sq_ << " / " << res.ndof_ << " = " << res.chi_sq_per_dof_
                          << " (p = " << res.p_ << ")" << endl
                          << "######################\n";
+    if(stop_orders) break;
   }
   return std::pair<int, double>(min_index, min_chi);
 }
@@ -339,21 +389,36 @@ std::pair<int,double> add_inv_poly(RooDataHist& data, RooRealVar& obs, RooArgLis
   const int max_order = 1;
   double min_chi = 1.e10;
   int min_index = -1;
+  double prev_chi = -1.;
+  int prev_ndof = -1;
+  bool has_prev = false;
   for(int order = 1; order <= max_order; ++order) {
     RooAbsPdf* basePdf = create_inv_polynomial(obs, order, name);
     RooAbsPdf* pdf = wrap_pdf(basePdf, data.sumEntries());
     auto res = fit_pdf_to_data(pdf, data, obs, useSideBands, verbose);
-    const bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 1);
+    bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 1);
+    bool stop_orders = false;
+    if(enforce_ftest_ && !add_all_fits_ && has_prev) {
+      const bool pass_ftest = perform_f_test(prev_chi, prev_ndof, res.chi_sq_, res.ndof_);
+      if(!pass_ftest) {
+        accept = false;
+        stop_orders = true;
+      }
+    }
     if(accept) {
       list.add(*basePdf);
     } else {
       delete pdf;
     }
+    has_prev = true;
+    prev_chi = res.chi_sq_;
+    prev_ndof = res.ndof_;
     if(res.chi_sq_ < min_chi) {min_chi = res.chi_sq_; min_index = list.getSize() - 1;}
     if(verbose > 1) cout << "######################\n"
                          << "### Inverse poly order " << order << " has chisq = " << res.chi_sq_ << " / " << res.ndof_ << " = " << res.chi_sq_per_dof_
                          << " (p = " << res.p_ << ")" << endl
                          << "######################\n";
+    if(stop_orders) break;
   }
   return std::pair<int, double>(min_index, min_chi);
 }
@@ -363,21 +428,36 @@ std::pair<int,double> add_chebychevs(RooDataHist& data, RooRealVar& obs, RooArgL
   const int max_order = 3;
   double min_chi = 1.e10;
   int min_index = -1;
+  double prev_chi = -1.;
+  int prev_ndof = -1;
+  bool has_prev = false;
   for(int order = 3; order <= max_order; ++order) {
     RooAbsPdf* basePdf = create_chebychev(obs, order, name);
     RooAbsPdf* pdf = wrap_pdf(basePdf, data.sumEntries());
     auto res = fit_pdf_to_data(pdf, data, obs, useSideBands, verbose);
-    const bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 3);
+    bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 3);
+    bool stop_orders = false;
+    if(enforce_ftest_ && !add_all_fits_ && has_prev) {
+      const bool pass_ftest = perform_f_test(prev_chi, prev_ndof, res.chi_sq_, res.ndof_);
+      if(!pass_ftest) {
+        accept = false;
+        stop_orders = true;
+      }
+    }
     if(accept) {
       list.add(*basePdf);
     } else {
       delete pdf;
     }
+    has_prev = true;
+    prev_chi = res.chi_sq_;
+    prev_ndof = res.ndof_;
     if(res.chi_sq_ < min_chi) {min_chi = res.chi_sq_; min_index = list.getSize() - 1;}
     if(verbose > 1) cout << "######################\n"
                          << "### Chebychev order " << order << " has chisq = " << res.chi_sq_ << " / " << res.ndof_ << " = " << res.chi_sq_per_dof_
                          << " (p = " << res.p_ << ")" << endl
                          << "######################\n";
+    if(stop_orders) break;
   }
   return std::pair<int, double>(min_index, min_chi);
 }
@@ -387,6 +467,9 @@ std::pair<int,double> add_bernsteins(RooDataHist& data, RooRealVar& obs, RooArgL
   const int max_order = 4;
   double min_chi = 1.e10;
   int min_index = -1;
+  double prev_chi = -1.;
+  int prev_ndof = -1;
+  bool has_prev = false;
   for(int order = 1; order <= max_order; ++order) {
     RooAbsPdf* basePdf;
     if(use_generic_bernstein_)   basePdf = create_generic_bernstein(obs, order, name);
@@ -394,17 +477,29 @@ std::pair<int,double> add_bernsteins(RooDataHist& data, RooRealVar& obs, RooArgL
     else                         basePdf = create_bernstein        (obs, order, name);
     RooAbsPdf* pdf = wrap_pdf(basePdf, data.sumEntries());
     auto res = fit_pdf_to_data(pdf, data, obs, useSideBands, verbose);
-    const bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 3);
+    bool accept = add_all_fits_ || (res.accept_ && !force_fit_order_) || (force_fit_order_ && order == 3);
+    bool stop_orders = false;
+    if(enforce_ftest_ && !add_all_fits_ && has_prev) {
+      const bool pass_ftest = perform_f_test(prev_chi, prev_ndof, res.chi_sq_, res.ndof_);
+      if(!pass_ftest) {
+        accept = false;
+        stop_orders = true;
+      }
+    }
     if(accept) {
       list.add(*basePdf);
     } else {
       delete pdf;
     }
+    has_prev = true;
+    prev_chi = res.chi_sq_;
+    prev_ndof = res.ndof_;
     if(res.chi_sq_ < min_chi) {min_chi = res.chi_sq_; min_index = list.getSize() - 1;}
     if(verbose > 1) cout << "######################\n"
                          << "### Bernstein order " << order << " has chisq = " << res.chi_sq_ << " / " << res.ndof_ << " = " << res.chi_sq_per_dof_
                          << " (p = " << res.p_ << ")" << endl
                          << "######################\n";
+    if(stop_orders) break;
   }
   return std::pair<int, double>(min_index, min_chi);
 }
