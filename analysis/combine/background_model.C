@@ -217,10 +217,11 @@ pdf_info get_dio_model(RooRealVar& obs, const TString process, const int selecti
     // pdf->setBufferStrategy(RooFFTConvPdf::Flat); //Extend, Flat, or Mirror
     pdf        = new RooNumConvPdf(Form("%s_pdf", name), "DIO PDF", obs, *theory, *resolution);
   } else if(fit_version == 1) {
+
     RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);
-    RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
-    RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
-    RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 1.932, 0.01, 5.0);
+    RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 10.3129, 0.1, 40.0);
+    RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 11.3908, 0.01, 100.0);
+    RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 3.05506, 0.01, 10.0);
     pdf = new RooGenericPdf(Form("%s_pdf", name), "Gamma-Poly Hybrid",
                                  Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
                                       obs.GetName(), x0->GetName(), alpha->GetName(),

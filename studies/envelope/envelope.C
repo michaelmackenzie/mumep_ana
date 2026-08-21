@@ -90,7 +90,7 @@ int envelope() {
   // ----------------------------------------------------
   // ROOFIT SETUP & STABLE ALTERNATE HYPOTHESIS FIT
   // ----------------------------------------------------
-  RooRealVar e_pos("e_pos", "Positron Energy", xmin, xmax, "MeV/c");
+  RooRealVar e_pos("e_pos", "Positron momentum", xmin, xmax, "MeV/c");
 
   // Define sub-ranges explicitly for the Fitter calculation
   e_pos.setRange("LowSideband",  xmin, blind_low);

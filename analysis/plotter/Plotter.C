@@ -215,6 +215,10 @@ public:
     haxis->GetXaxis()->SetLabelSize(0.);
     haxis->GetYaxis()->SetTitleSize(0.06);
     haxis->GetYaxis()->SetTitleOffset(0.9);
+    haxis->GetXaxis()->SetTitleFont(132);
+    haxis->GetYaxis()->SetTitleFont(132);
+    haxis->GetXaxis()->SetLabelFont(132);
+    haxis->GetYaxis()->SetLabelFont(132);
   }
 
   //-------------------------------------------------------------------------------------------------------
@@ -229,6 +233,10 @@ public:
     haxis_r->GetXaxis()->SetLabelOffset(0.008);
     haxis_r->GetXaxis()->SetTitleSize(0.18);
     haxis_r->GetXaxis()->SetTitleOffset(0.8);
+    haxis_r->GetXaxis()->SetTitleFont(132);
+    haxis_r->GetYaxis()->SetTitleFont(132);
+    haxis_r->GetXaxis()->SetLabelFont(132);
+    haxis_r->GetYaxis()->SetLabelFont(132);
   }
 
   //-------------------------------------------------------------------------------------------------------
@@ -535,6 +543,7 @@ public:
     leg->SetNColumns(legend_columns_);
     leg->SetLineWidth(0); leg->SetLineColor(0); leg->SetFillColor(0); leg->SetFillStyle(0);
     leg->SetTextSize(0.04);
+    leg->SetTextFont(132);
     if(data) leg->AddEntry(data, "Data", "PL");
     for(auto signal : signals) {
       leg->AddEntry(signal, signal->GetTitle(), "F");
@@ -824,6 +833,7 @@ public:
     leg->SetNColumns(legend_columns_);
     leg->SetLineWidth(0); leg->SetLineColor(0); leg->SetFillColor(0); leg->SetFillStyle(0);
     leg->SetTextSize(0.04);
+    leg->SetTextFont(132);
     if(data) leg->AddEntry(data, "Data", "PL");
     for(auto signal : signals) {
       leg->AddEntry(signal, signal->GetTitle(), "F");

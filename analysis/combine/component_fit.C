@@ -47,8 +47,8 @@ void get_tail_defaults(const TString& component,
   const bool is_mumem = process == "mumem";
 
   if(c == "signal") {
-    fit_xmin = (is_mumem) ? 105.5 : 93.;
-    init_params = (is_mumem) ? std::vector<double>{353., -3.4} : std::vector<double>{316., -3.5};
+    // fit_xmin = (is_mumem) ? 105.5 : 93.;
+    // init_params = (is_mumem) ? std::vector<double>{353., -3.4} : std::vector<double>{316., -3.5};
   } else if(c == "dio") {
     fit_xmin = 102.0;
     init_params = {473., -5.};
