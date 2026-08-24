@@ -30,6 +30,117 @@ std::vector<RateUnc_t> rate_uncertainties(TString process) {
   return sys;
 }
 
+const TH1* preferred_momentum_hist(const pdf_info& info) {
+  if(info.smoothed_hist_)   return info.smoothed_hist_;
+  if(info.normalized_hist_) return info.normalized_hist_;
+  return info.hist_;
+}
+
+const TH1* preferred_time_hist(const pdf_info& info) {
+  if(info.t0_smoothed_hist_)   return info.t0_smoothed_hist_;
+  if(info.t0_normalized_hist_) return info.t0_normalized_hist_;
+  return info.t0_raw_hist_;
+}
+
+TH2* make_independent_2d_hist(const TH1* momentum_hist,
+                              const TH1* time_hist,
+                              const TString& name,
+                              const TString& title,
+                              const double target_rate) {
+  if(!momentum_hist || !time_hist) return nullptr;
+
+  const double momentum_integral = momentum_hist->Integral();
+  const double time_integral = time_hist->Integral();
+  if(momentum_integral <= 0. || time_integral <= 0.) return nullptr;
+
+  const int momentum_bins = momentum_hist->GetNbinsX();
+  const int time_bins = time_hist->GetNbinsX();
+  auto h2 = new TH2D(name, title,
+                     momentum_bins, momentum_hist->GetXaxis()->GetBinLowEdge(1), momentum_hist->GetXaxis()->GetBinUpEdge(momentum_bins),
+                     time_bins, time_hist->GetXaxis()->GetBinLowEdge(1), time_hist->GetXaxis()->GetBinUpEdge(time_bins));
+  h2->GetXaxis()->SetTitle(momentum_hist->GetXaxis()->GetTitle());
+  h2->GetYaxis()->SetTitle(time_hist->GetXaxis()->GetTitle());
+
+  for(int ix = 1; ix <= momentum_bins; ++ix) {
+    const double px = momentum_hist->GetBinContent(ix) / momentum_integral;
+    for(int iy = 1; iy <= time_bins; ++iy) {
+      const double py = time_hist->GetBinContent(iy) / time_integral;
+      const double value = target_rate * px * py;
+      h2->SetBinContent(ix, iy, value);
+      h2->SetBinError(ix, iy, std::sqrt(std::max(0., value)));
+    }
+  }
+  return h2;
+}
+
+bool add_independent_2d_inputs(RooWorkspace& ws,
+                               const pdf_info& info,
+                               const TString& process,
+                               const int selection,
+                               const TString& component_name,
+                               RooRealVar& momentum_obs,
+                               RooRealVar& time_obs,
+                               const TString& figdir,
+                               TFile* out_file = nullptr) {
+  const TH1* momentum_hist = preferred_momentum_hist(info);
+  const TH1* time_hist = preferred_time_hist(info);
+  if(!momentum_hist || !time_hist) {
+    cout << __func__ << ": Missing 1D inputs for 2D model component " << component_name.Data() << endl;
+    return false;
+  }
+
+  const TString base_name = Form("%s_%i_%s", process.Data(), selection, component_name.Data());
+  TH2* h2 = make_independent_2d_hist(momentum_hist,
+                                     time_hist,
+                                     Form("%s_hist", base_name.Data()),
+                                     Form("%s 2D histogram", info.title_.Data()),
+                                     info.rate_);
+  if(!h2) {
+    cout << __func__ << ": Unable to build 2D histogram for component " << component_name.Data() << endl;
+    return false;
+  }
+
+  RooArgList vars;
+  vars.add(momentum_obs);
+  vars.add(time_obs);
+  RooDataHist data(Form("%s_2d_data_hist", base_name.Data()), Form("%s 2D data histogram", info.title_.Data()), vars, h2);
+  RooHistPdf pdf(Form("%s_pdf", base_name.Data()), Form("%s 2D PDF", info.title_.Data()), vars, data);
+
+  if(figdir != "") {
+    const TString plot_dir = Form("%s/2d", figdir.Data());
+    gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", plot_dir.Data(), plot_dir.Data()));
+
+    auto save_2d_plot = [&](const TString& suffix, const bool logz) {
+      TCanvas c(Form("c_%s%s", base_name.Data(), suffix.Data()), Form("c_%s%s", base_name.Data(), suffix.Data()), 1200, 1000);
+      c.SetRightMargin(0.16);
+      c.SetLeftMargin(0.12);
+      c.SetBottomMargin(0.12);
+      c.SetTopMargin(0.06);
+      if(logz) {
+        const double min_positive = std::max(1.e-12, h2->GetMinimum(1.e-12));
+        h2->SetMinimum(min_positive);
+        c.SetLogz();
+      } else {
+        h2->SetMinimum(0.);
+      }
+      h2->Draw("COLZ");
+      c.SaveAs(Form("%s/%s%s.png", plot_dir.Data(), base_name.Data(), suffix.Data()));
+    };
+
+    save_2d_plot("", false);
+    save_2d_plot("_logz", true);
+  }
+
+  ws.import(data);
+  ws.import(pdf);
+  if(out_file) {
+    out_file->cd();
+    h2->Write();
+  }
+  delete h2;
+  return true;
+}
+
 //---------------------------------------------------------------------------------------------------------------------------
 void print_model(TString figdir, const int selection, RooRealVar& obs, RooDataHist* data,
                  pdf_info& signal_model,
@@ -172,11 +283,17 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   // Number of signal events expected to be generated
   const double n_signal_exp = nmuons_ * muon_capture_fraction_ * signal_br_;
+  TString figdir = Form("figures/%s%s", process.Data(), (tag != "") ? ("_"+tag).Data() : "");
 
   // Retrieve the signal data
   auto signal_model     = read_model          ("signal", process, selection, tag);
   auto background_model = get_background_model(obs     , process, selection, tag);
   auto data             = get_data            (obs     , process, selection, tag);
+
+  if(do_2d_fit_ && !hist_pdfs_) {
+    cout << __func__ << ": 2D fits require hist_pdfs_ = true for now." << endl;
+    return 1;
+  }
 
   auto sig_pdf = signal_model.pdf_;
 
@@ -208,7 +325,6 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   // Draw the inputs
   if(print_) {
-    TString figdir = Form("figures/%s%s", process.Data(), (tag != "") ? ("_"+tag).Data() : "");
     gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", figdir.Data(), figdir.Data()));
     print_model(figdir, selection, obs, data, signal_model, background_model, process == "mumem");
   }
@@ -324,11 +440,45 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   RooWorkspace ws("workspace", "workspace");
   ws.import(obs);
   ws.import(*data);
-  ws.import(*sig_pdf); ws.import(*signal_model.norm_);
-  signal_model.hist_->Write();
-  for(auto& bkg : background_model) {
-    ws.import(*bkg.pdf_); ws.import(*bkg.norm_);
-    bkg.hist_->Write();
+  if(do_2d_fit_) {
+    ws.import(*signal_model.norm_);
+    for(auto& bkg : background_model) ws.import(*bkg.norm_);
+  } else {
+    ws.import(*sig_pdf); ws.import(*signal_model.norm_);
+    signal_model.hist_->Write();
+    for(auto& bkg : background_model) {
+      ws.import(*bkg.pdf_); ws.import(*bkg.norm_);
+      bkg.hist_->Write();
+    }
+  }
+
+  if(do_2d_fit_) {
+    if(!include_t0_) {
+      cout << __func__ << ": 2D fits require include_t0_ = true." << endl;
+      return 1;
+    }
+
+    const TH1* signal_time_hist = preferred_time_hist(signal_model);
+    if(!signal_time_hist) {
+      cout << __func__ << ": Signal time histogram is missing, cannot build 2D inputs." << endl;
+      return 1;
+    }
+
+    RooRealVar obs_t(Form("obs_t_%i", selection), "t0",
+                     0.5 * (signal_time_hist->GetXaxis()->GetBinLowEdge(1) + signal_time_hist->GetXaxis()->GetBinUpEdge(signal_time_hist->GetNbinsX())),
+                     signal_time_hist->GetXaxis()->GetBinLowEdge(1),
+                     signal_time_hist->GetXaxis()->GetBinUpEdge(signal_time_hist->GetNbinsX()));
+    obs_t.SetTitle("t0");
+    ws.import(obs_t);
+
+    if(!add_independent_2d_inputs(ws, signal_model, process, selection, signal_model.name_, obs, obs_t, figdir, fout)) {
+      return 1;
+    }
+    for(auto& bkg : background_model) {
+      if(!add_independent_2d_inputs(ws, bkg, process, selection, bkg.name_, obs, obs_t, figdir, fout)) {
+        return 1;
+      }
+    }
   }
 
   // Add systematic uncertainties

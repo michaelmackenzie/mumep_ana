@@ -188,6 +188,7 @@ int fit_component_model(TString process,
     }
 
     if(h_t0) {
+      h_t0 = trim_hist(h_t0, t_min_, t_max_);
       const int trebin = (t_bin_width_ > 0.) ? int(t_bin_width_/h_t0->GetBinWidth(1) + 1.e-3) : 1;
       if(trebin > 1) h_t0->Rebin(trebin);
 
@@ -205,6 +206,17 @@ int fit_component_model(TString process,
       t0_exp_fit.SetParameters(std::log(std::max(1.e-9, h_t0_fit->GetMaximum())), -1.e-3);
       const int fit_status = h_t0->Fit(&t0_exp_fit, "Q0R");
       if(fit_status == 0) {
+        TCanvas c_t0(Form("c_%s_t0_fit", component.Data()), Form("c_%s_t0_fit", component.Data()), 1200, 1000);
+        h_t0->SetLineColor(kBlack);
+        h_t0->SetMarkerColor(kBlack);
+        h_t0->SetMarkerStyle(20);
+        h_t0->Draw("E1");
+        t0_exp_fit.SetLineColor(kRed);
+        t0_exp_fit.Draw("same");
+        c_t0.SetLogy();
+        c_t0.SaveAs(Form("%s/%s_t0_fit_%i%s.png", figdir.Data(), component.Data(), selection,
+                         (isys > 0) ? Form("_sys_%i", isys) : ""));
+
         for(int ibin = 1; ibin <= h_t0_fit->GetNbinsX(); ++ibin) {
           const double x = h_t0_fit->GetBinCenter(ibin);
           const double val = std::max(0., t0_exp_fit.Eval(x));

@@ -7,6 +7,7 @@ bool         include_sys_ = false; // Evaluate systematics
 bool         use_evtana_  = true ; // Use Mu2eEvtAna inputs (EventNtuple)
 bool         run1a_range_ = false; // Use Run 1A paper range (only in EvtAna mode)
 bool         include_t0_  = true ; // Add t0 histograms to the output
+bool         do_2d_fit_   = false; // Perform a (p, t) fit instead of a 1D p fit
 
 // Histogram file info
 int          hist_mode_   = 2;
@@ -15,12 +16,14 @@ TString      file_type_   = "hist"; // histogram file extension
 
 // Fit info
 TString      var_         = "obs"; // Observable name
-double       bin_width_   = 0.2 ;  // Expected bin width, rebin to achieve if possible
-double       t_bin_width_ =  25.;  // Time distribution bin width
-double       xmin_em_     = 100.;  // Momentum range for mu- --> e- fit
-double       xmax_em_     = 110.;
-double       xmin_ep_     =  87.;  // Momentum range for mu- --> e+ fit
-double       xmax_ep_     =  97.;
+double       bin_width_   =  0.2 ;  // Expected bin width, rebin to achieve if possible
+double       t_bin_width_ =   25.;  // Time distribution bin width
+double       xmin_em_     =  100.;  // Momentum range for mu- --> e- fit
+double       xmax_em_     =  110.;
+double       xmin_ep_     =   87.;  // Momentum range for mu- --> e+ fit
+double       xmax_ep_     =   97.;
+double       t_min_       =  475.;  // Time range for 2D fits
+double       t_max_       = 1650.;
 
 void set_evtana_defaults() {
   dir_path_  = "Ana/";

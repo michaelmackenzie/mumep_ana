@@ -360,6 +360,11 @@ int save_fit_workspace(TString process,
                          obs, *fit_data);
   }
 
+  TH1* smoothed_for_workspace = smoothed_hist;
+  if(hist_pdfs && !smoothed_for_workspace) {
+    smoothed_for_workspace = h_fit;
+  }
+
   const char* fitdir = Form("workspaces/%s%s", process.Data(), (tag == "") ? "" : ("_"+tag).Data());
   gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", fitdir, fitdir));
   TFile* fout = new TFile(Form("%s/%s_fit_%i%s.root", fitdir, component.Data(), selection, out_suffix.Data()), "RECREATE");
@@ -387,7 +392,7 @@ int save_fit_workspace(TString process,
                           Form("%s_%i_%s_normalized_hist", process.Data(), selection, component.Data()),
                           Form("%s_%i_%s_normalized_data_hist", process.Data(), selection, component.Data()),
                           Form("%s normalized data hist", component_title.Data()));
-  write_hist_to_workspace(smoothed_hist,
+  write_hist_to_workspace(smoothed_for_workspace,
                           Form("%s_%i_%s_smoothed_hist", process.Data(), selection, component.Data()),
                           Form("%s_%i_%s_smoothed_data_hist", process.Data(), selection, component.Data()),
                           Form("%s smoothed data hist", component_title.Data()));
@@ -440,6 +445,8 @@ int save_fit_workspace_with_hist(TString process,
                      Form("%s PDF", component.Data()),
                      obs, fit_data);
 
+  TH1* smoothed_for_workspace = smoothed_hist ? smoothed_hist : h_fit;
+
   const char* fitdir = Form("workspaces/%s%s", process.Data(), (tag == "") ? "" : ("_"+tag).Data());
   gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", fitdir, fitdir));
   TFile* fout = new TFile(Form("%s/%s_fit_%i%s.root", fitdir, component.Data(), selection, out_suffix.Data()), "RECREATE");
@@ -467,7 +474,7 @@ int save_fit_workspace_with_hist(TString process,
                           Form("%s_%i_%s_normalized_hist", process.Data(), selection, component.Data()),
                           Form("%s_%i_%s_normalized_data_hist", process.Data(), selection, component.Data()),
                           Form("%s normalized data hist", component.Data()));
-  write_hist_to_workspace(smoothed_hist,
+  write_hist_to_workspace(smoothed_for_workspace,
                           Form("%s_%i_%s_smoothed_hist", process.Data(), selection, component.Data()),
                           Form("%s_%i_%s_smoothed_data_hist", process.Data(), selection, component.Data()),
                           Form("%s smoothed data hist", component.Data()));

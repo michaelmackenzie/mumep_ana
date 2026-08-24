@@ -7,7 +7,7 @@ if [[ "${CARDS}" == "" ]]; then
 fi
 
 FREEZE="--freezeParameters allConstrainedNuisances"
-ARGS="-t -1 --rMin -100. --rMax 100. --cl 0.9 --cminDefaultMinimizerStrategy=0 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1 --rAbsAcc 0.0001 --rRelAcc 0.001"
+ARGS="-t -1 --rMin -100. --rMax 100. --cl 0.9 --cminDefaultMinimizerStrategy=0 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1 --rAbsAcc 0.001 --rRelAcc 0.001 --plot"
 for CARD in $CARDS; do
     echo "============================================"
     echo "Processing card ${CARD}"
