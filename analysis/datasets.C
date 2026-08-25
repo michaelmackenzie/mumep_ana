@@ -39,8 +39,8 @@ void init_dataset_info() {
   // Retrieve N(gen) using scripts/samCountGenEvents.sh and N(events) using scripts/samCountEvents.sh
   //                                  N(gen)      N(digi) emin emax    rate          stn dataset           digi dataset
 
-  // const double livetime_digi = (49535.e5 / 2585823777.) * 556000.; // N(gen digi) / N(gen sim) * livetime (sim) (CosmicAll)
-  const double t_cry4ab1 = 4437500.0; // 1.37e7 // livetime
+  const double livetime_correction = 5.72/4.438; // due to bug in livetime calculation
+  const double t_cry4ab1 = 4437713.0*livetime_correction; // livetime
   // mcs evaluation: 4437713
 
   if(!use_evtana_) { // Stntuple inputs
