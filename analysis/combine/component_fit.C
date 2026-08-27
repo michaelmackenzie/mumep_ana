@@ -346,6 +346,7 @@ int fit_component_model(TString process,
   if(component == "signal" || component == "dio") {
     return save_fit_workspace_with_hist(process, selection, tag, component, pdf, obs, norm,
                                         h,
+                                        hist_pdfs_,
                                         h_raw_for_ws,
                                         h_normalized_for_ws,
                                         h_smoothed_for_ws,

@@ -44,7 +44,7 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
   if(!use_hist) {
     delete h; //no longer needed
 
-    const int fit_version = 1; // 0: CB * Landau; 1: Landau CB; 2: CB
+    const int fit_version = 2; // 0: CB * Landau; 1: Landau CB; 2: CB
     const float signal_peak = (is_mumem) ? 104.0f : 92.3f;
 
     if(fit_version == 0) { // convolve double-sided crysal ball with energy losses

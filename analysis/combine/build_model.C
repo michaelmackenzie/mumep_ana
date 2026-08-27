@@ -6,6 +6,7 @@
 #include "../physics.C"
 #include "systematics.C"
 #include "../tools/write_datacard.C"
+// #include "combine/HiggsAnalysis/CombinedLimit/src/RooLandauCB.cc"
 
 bool print_      = true;
 bool write_card_ = true;
@@ -142,7 +143,7 @@ bool add_independent_2d_inputs(RooWorkspace& ws,
 }
 
 //---------------------------------------------------------------------------------------------------------------------------
-void print_model(TString figdir, const int selection, RooRealVar& obs, RooDataHist* data,
+void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsData* data,
                  pdf_info& signal_model,
                  std::vector<pdf_info>& background_model, const bool is_mumem) {
   const double signal_scale = (is_mumem) ? 20. : 1.7e3;
@@ -288,7 +289,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   // Retrieve the signal data
   auto signal_model     = read_model          ("signal", process, selection, tag);
   auto background_model = get_background_model(obs     , process, selection, tag);
-  auto data             = get_data            (obs     , process, selection, tag);
+  RooAbsData* data      = get_data            (obs     , process, selection, tag);
 
   if(do_2d_fit_ && !hist_pdfs_) {
     cout << __func__ << ": 2D fits require hist_pdfs_ = true for now." << endl;
@@ -310,16 +311,34 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   // Generate toy data
   if(!data) {
-    for(auto& bkg : background_model) {
-      auto gen_data = bkg.pdf_->generateBinned(obs, bkg.rate_);
-      if(!data) {
-        data = gen_data;
-        data->SetName("data_obs");
-      } else if(gen_data) {
-        data->add(*gen_data);
-      } else {
-        cout << __func__ << ": Gen data for process " << bkg.name_.Data() << " is null!\n";
+    if(unbinned_) {
+      auto generated_data = static_cast<RooDataSet*>(nullptr);
+      for(auto& bkg : background_model) {
+        auto gen_data = bkg.pdf_->generate(obs, bkg.rate_);
+        if(!gen_data) {
+          cout << __func__ << ": Gen data for process " << bkg.name_.Data() << " is null!\n";
+        } else if(!generated_data) {
+          generated_data = gen_data;
+          generated_data->SetName("data_obs");
+        } else {
+          generated_data->append(*gen_data);
+        }
       }
+      data = generated_data;
+    } else {
+      auto generated_data = static_cast<RooDataHist*>(nullptr);
+      for(auto& bkg : background_model) {
+        auto gen_data = bkg.pdf_->generateBinned(obs, bkg.rate_);
+        if(!gen_data) {
+          cout << __func__ << ": Gen data for process " << bkg.name_.Data() << " is null!\n";
+        } else if(!generated_data) {
+          generated_data = gen_data;
+          generated_data->SetName("data_obs");
+        } else {
+          generated_data->add(*gen_data);
+        }
+      }
+      data = generated_data;
     }
   }
 

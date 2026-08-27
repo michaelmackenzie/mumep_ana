@@ -8,6 +8,7 @@ bool         use_evtana_  = true ; // Use Mu2eEvtAna inputs (EventNtuple)
 bool         run1a_range_ = false; // Use Run 1A paper range (only in EvtAna mode)
 bool         include_t0_  = true ; // Add t0 histograms to the output
 bool         do_2d_fit_   = false; // Perform a (p, t) fit instead of a 1D p fit
+bool         unbinned_    = false; // Perform unbinned fits
 
 // Histogram file info
 int          hist_mode_   = 2;

@@ -5,11 +5,12 @@ CARD=$1
 if [[ "${CARD}" == "" ]]; then
     echo "No card given!"
 fi
+EXTRAARGS=$2
 
 ARGS="-M HybridNew --LHCmode LHC-limits"
 ARGS="${ARGS} -t -1 --rMin 0. --rMax 30. --cl 0.9 --cminDefaultMinimizerStrategy=0 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1"
 ARGS="${ARGS} --clsAcc 0.005 --confidenceTolerance 0.05 --interpAcc 0.1 --rRelAcc 0.001 --rAbsAcc 0.01"
-ARGS="${ARGS} --plot figures/limit.png"
+ARGS="${ARGS} --plot figures/limit.png ${EXTRAARGS}"
 echo "============================================"
 echo "Processing card ${CARD}"
 echo "============================================"

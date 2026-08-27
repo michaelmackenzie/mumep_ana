@@ -2,6 +2,8 @@
 #ifndef __CONVANA_ANALYSIS_FITWORKSPACEUTILS__
 #define __CONVANA_ANALYSIS_FITWORKSPACEUTILS__
 
+#include <memory>
+
 #include "../tools/utilities.C"
 
 int enforce_uniform_if_sparse(TH1* h,
@@ -161,6 +163,16 @@ bool should_fit_pdf(const TString& requested_pdf_type, const bool default_hist_p
   return true;
 }
 
+void freeze_pdf_parameters(RooAbsPdf* pdf, RooDataHist& data_hist) {
+  if(!pdf) return;
+
+  std::unique_ptr<RooArgSet> params(pdf->getParameters(data_hist));
+  for(auto parameter : *params) {
+    auto real_var = dynamic_cast<RooRealVar*>(parameter);
+    if(real_var) real_var->setConstant(true);
+  }
+}
+
 int run_component_fit(RooAbsPdf* pdf,
                       RooDataHist& data_hist,
                       const TString& requested_pdf_type,
@@ -168,16 +180,18 @@ int run_component_fit(RooAbsPdf* pdf,
                       const bool use_sumw2 = true,
                       const TString& fit_range = "") {
   if(!pdf) return 1;
-  if(pdf->InheritsFrom("RooHistPdf") || pdf->InheritsFrom("RooUniform")) return 0;
-  if(!should_fit_pdf(requested_pdf_type, default_hist_pdf)) return 0;
-
-  if(fit_range != "") {
-    if(use_sumw2) pdf->fitTo(data_hist, RooFit::Range(fit_range.Data()), RooFit::SumW2Error(true));
-    else          pdf->fitTo(data_hist, RooFit::Range(fit_range.Data()));
-  } else {
-    if(use_sumw2) pdf->fitTo(data_hist, RooFit::SumW2Error(true));
-    else          pdf->fitTo(data_hist);
+  if(!pdf->InheritsFrom("RooHistPdf") && !pdf->InheritsFrom("RooUniform") &&
+     should_fit_pdf(requested_pdf_type, default_hist_pdf)) {
+    if(fit_range != "") {
+      if(use_sumw2) pdf->fitTo(data_hist, RooFit::Range(fit_range.Data()), RooFit::SumW2Error(true));
+      else          pdf->fitTo(data_hist, RooFit::Range(fit_range.Data()));
+    } else {
+      if(use_sumw2) pdf->fitTo(data_hist, RooFit::SumW2Error(true));
+      else          pdf->fitTo(data_hist);
+    }
   }
+
+  freeze_pdf_parameters(pdf, data_hist);
   return 0;
 }
 
@@ -424,6 +438,7 @@ int save_fit_workspace_with_hist(TString process,
                                  RooRealVar& obs,
                                  RooRealVar& norm,
                                  TH1* hist,
+                                 const bool hist_pdfs,
                                  TH1* raw_hist = nullptr,
                                  TH1* normalized_hist = nullptr,
                                  TH1* smoothed_hist = nullptr,
@@ -437,13 +452,20 @@ int save_fit_workspace_with_hist(TString process,
   auto h_fit = (TH1*) hist->Clone(hist_name);
   h_fit->SetName(hist_name);
 
-  pdf->SetName("tmp_pdf");
-  RooDataHist fit_data(Form("%s_%i_%s_data_hist", process.Data(), selection, component.Data()),
-                       Form("%s data hist", component.Data()),
-                       obs, h_fit);
-  RooHistPdf fit_pdf(Form("%s_%i_%s_pdf", process.Data(), selection, component.Data()),
-                     Form("%s PDF", component.Data()),
-                     obs, fit_data);
+  const TString pdf_name = Form("%s_%i_%s_pdf", process.Data(), selection, component.Data());
+  RooAbsPdf* out_pdf = pdf;
+  RooDataHist* fit_data = nullptr;
+  RooHistPdf* fit_pdf = nullptr;
+  if(hist_pdfs) {
+    pdf->SetName("tmp_pdf");
+    fit_data = new RooDataHist(Form("%s_%i_%s_data_hist", process.Data(), selection, component.Data()),
+                               Form("%s data hist", component.Data()),
+                               obs, h_fit);
+    fit_pdf = new RooHistPdf(pdf_name, Form("%s PDF", component.Data()), obs, *fit_data);
+    out_pdf = fit_pdf;
+  } else {
+    pdf->SetName(pdf_name);
+  }
 
   TH1* smoothed_for_workspace = smoothed_hist ? smoothed_hist : h_fit;
 
@@ -464,7 +486,7 @@ int save_fit_workspace_with_hist(TString process,
     h_copy->Write();
   };
 
-  ws.import(fit_pdf);
+  ws.import(*out_pdf);
   ws.import(norm);
   write_hist_to_workspace(raw_hist,
                           Form("%s_%i_%s_raw_hist", process.Data(), selection, component.Data()),
@@ -494,7 +516,9 @@ int save_fit_workspace_with_hist(TString process,
   h_fit->Write();
   fout->Close();
 
-  print_pdf(&fit_pdf);
+  print_pdf(out_pdf);
+  delete fit_pdf;
+  delete fit_data;
   return 0;
 }
 
