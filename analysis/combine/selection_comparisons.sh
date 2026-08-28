@@ -3,6 +3,7 @@
 
 CARDS=$1
 CL=$2
+SKIPTOYS=$3
 if [[ "${CARDS}" == "" ]]; then
     CARDS="20_r0102 24_r0102 25_r0102 24_25_r0102 60_evt_r0101_0d50bins 20_evt_r0100 24_evt_r0100 25_evt_r0100 24_25_evt_r0100"
 fi
@@ -29,6 +30,16 @@ for CARD in $CARDS; do
     COMMAND="combine -d datacards/combine_total_mumem_${CARD}_cc.txt ${ARGS} ${FREEZE}"
     echo ${COMMAND}
     ${COMMAND}
+
+    if [[ "${SKIPTOYS}" == "" ]]; then
+        echo "======> Performing toy-based CLs calculations"
+        COMMAND="cls_toys.sh datacards/combine_total_mumem_${CARD}.txt"
+        echo ${COMMAND}
+        ${COMMAND}
+        COMMAND="cls_toys.sh datacards/combine_total_mumem_${CARD}.txt"
+        echo ${COMMAND} \"${FREEZE}\"
+        ${COMMAND} "${FREEZE}"
+    fi
 done
 
 echo "Done."

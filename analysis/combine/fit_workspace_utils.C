@@ -336,7 +336,7 @@ int enforce_uniform_if_sparse(TH1* h,
     if(h->GetBinContent(bin) > 0.) ++filled;
   }
 
-  if(filled < min_filled_fraction*nbins) {
+  if(!pdf_name.Contains("rmc") && filled < min_filled_fraction*nbins) {
     cout << "Only " << filled << " / " << nbins << " bins have content --> using a uniform model!\n";
     delete pdf;
     pdf = new RooUniform(pdf_name, pdf_title, obs);

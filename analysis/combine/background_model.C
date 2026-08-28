@@ -376,7 +376,7 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
 
   const char* name = Form("%s_%i_rmc_ext", process.Data(), selection);
 
-  RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);
+  RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.); x0->setConstant(true);
   RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
   RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
   RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 1.932, 0.01, 5.0);
@@ -387,6 +387,12 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
                                     lambda->GetName(), obs.GetName()),
                                RooArgList(obs, *x0, *alpha, *beta, *lambda));
 
+  if(freeze) {
+    x0->setConstant(true);
+    alpha->setConstant(true);
+    beta->setConstant(true);
+    lambda->setConstant(true);
+  }
 
   res.pdf_   = pdf;
   res.rate_  = 50.; // rough starting point
