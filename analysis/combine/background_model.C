@@ -8,6 +8,7 @@
 #include "model_io_utils.C"
 #include "RooStitchedPdf.cxx"
 #include "../tools/utilities.C"
+#include "../tools/families.C"
 
 TString data_dataset_key_from_tag(TString tag) {
   tag.ToLower();
@@ -375,23 +376,42 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
   pdf_info res;
 
   const char* name = Form("%s_%i_rmc_ext", process.Data(), selection);
+  RooAbsPdf* pdf;
 
-  RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.); x0->setConstant(true);
-  RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
-  RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
-  RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 1.932, 0.01, 5.0);
-  auto pdf = new RooGenericPdf(Form("%s_pdf", name), "Gamma-Poly Hybrid",
-                               Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
-                                    obs.GetName(), x0->GetName(), alpha->GetName(),
-                                    obs.GetName(), beta->GetName(),
-                                    lambda->GetName(), obs.GetName()),
-                               RooArgList(obs, *x0, *alpha, *beta, *lambda));
+  if(process == "mumep") {
+    // RooRealVar* p0 = new RooRealVar(Form("%s_p0", name), "p0", 0.1, -1., 1.);
+    // RooRealVar* p1 = new RooRealVar(Form("%s_p1", name), "p1", 0.1, -1., 1.);
+    // RooRealVar* p2 = new RooRealVar(Form("%s_p1", name), "p1", 0.1, -1., 1.);
+    // pdf = new RooChebychev(Form("%s_pdf", name), "RMC (external) background", obs, RooArgList(*p0, *p1, *p2));
+    // if(freeze) {
+    //   p0->setConstant(true);
+    //   p1->setConstant(true);
+    //   p2->setConstant(true);
+    // }
+    // pdf = create_exponential(obs, 2, name);
+    // pdf = create_powerlaw(obs, 2, name);
+    // pdf = create_inv_polynomial(obs, 3, name);
+    pdf = create_gaus_poly_pdf(obs, 1, name);
+    pdf->SetName(Form("%s_pdf", name));
+  } else {
 
-  if(freeze) {
-    x0->setConstant(true);
-    alpha->setConstant(true);
-    beta->setConstant(true);
-    lambda->setConstant(true);
+    RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.); x0->setConstant(true);
+    RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
+    RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
+    RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 1.932, 0.01, 5.0);
+    pdf = new RooGenericPdf(Form("%s_pdf", name), "Gamma-Poly Hybrid",
+                            Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
+                                 obs.GetName(), x0->GetName(), alpha->GetName(),
+                                 obs.GetName(), beta->GetName(),
+                                 lambda->GetName(), obs.GetName()),
+                            RooArgList(obs, *x0, *alpha, *beta, *lambda));
+
+    if(freeze) {
+      x0->setConstant(true);
+      alpha->setConstant(true);
+      beta->setConstant(true);
+      lambda->setConstant(true);
+    }
   }
 
   res.pdf_   = pdf;
@@ -409,17 +429,40 @@ pdf_info get_rmc_int_model(RooRealVar& obs, TString process, int selection, cons
   pdf_info res;
 
   const char* name = Form("%s_%i_rmc_int", process.Data(), selection);
+  RooAbsPdf* pdf;
 
-  RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);
-  RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
-  RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
-  RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 1.932, 0.01, 5.0);
-  auto pdf = new RooGenericPdf(Form("%s_pdf", name), "Gamma-Poly Hybrid",
-                               Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
-                                    obs.GetName(), x0->GetName(), alpha->GetName(),
-                                    obs.GetName(), beta->GetName(),
-                                    lambda->GetName(), obs.GetName()),
-                               RooArgList(obs, *x0, *alpha, *beta, *lambda));
+  if(process == "mumep") {
+    // RooRealVar* p0 = new RooRealVar(Form("%s_p0", name), "p0", 0.1, -1., 1.);
+    // RooRealVar* p1 = new RooRealVar(Form("%s_p1", name), "p1", 0.1, -1., 1.);
+    // RooRealVar* p2 = new RooRealVar(Form("%s_p1", name), "p2", 0.1, -1., 1.);
+    // RooRealVar* p3 = new RooRealVar(Form("%s_p3", name), "p3", 0.1, -1., 1.);
+    // pdf = new RooChebychev(Form("%s_pdf", name), "RMC (internal) background", obs, RooArgList(*p0, *p1, *p2, *p3));
+    // if(freeze) {
+    //   p0->setConstant(true);
+    //   p1->setConstant(true);
+    //   p2->setConstant(true);
+    //   p3->setConstant(true);
+    // }
+    pdf = create_gaus_poly_pdf(obs, 1, name);
+  } else {
+
+    RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);
+    RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
+    RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
+    RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 1.932, 0.01, 5.0);
+    pdf = new RooGenericPdf(Form("%s_pdf", name), "Gamma-Poly Hybrid",
+                                 Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
+                                      obs.GetName(), x0->GetName(), alpha->GetName(),
+                                      obs.GetName(), beta->GetName(),
+                                      lambda->GetName(), obs.GetName()),
+                                 RooArgList(obs, *x0, *alpha, *beta, *lambda));
+    if(freeze) {
+      x0->setConstant(true);
+      alpha->setConstant(true);
+      beta->setConstant(true);
+      lambda->setConstant(true);
+    }
+  }
 
 
   res.pdf_   = pdf;
@@ -445,11 +488,14 @@ pdf_infos get_background_model(RooRealVar& obs, TString process, const int selec
   pdfs.push_back(read_model("cosmic", process, selection, tag));
   pdfs.push_back(read_model("rpc_ext", process, selection, tag));
   pdfs.push_back(read_model("rpc_int", process, selection, tag));
+  pdfs.push_back(read_model("pbar", process, selection, tag));
   if(!use_evtana_) {
-    pdfs.push_back(read_model("pbar", process, selection, tag));
+
   } else {
     pdfs.push_back(read_model("rmc_ext", process, selection, tag));
-    // pdfs.push_back(read_model("rmc_int", process, selection, tag));
+    if(!is_mumem) {
+      pdfs.push_back(read_model("rmc_int", process, selection, tag));
+    }
   }
 
   return pdfs;

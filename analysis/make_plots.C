@@ -85,9 +85,9 @@ int make_plots(const bool mumem = true, vector<int> sets = {7, 10, 20}, TString 
   if(use_evtana_) {
     plotter_->configure_for_evtana();
     if(mumem)
-      plotter_->bkgs_ = {"rpc_int", "rpc_ext", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n", "cosmic", "dio"}; // only some are available
+      plotter_->bkgs_ = {"pbar", "rpc_int", "rpc_ext", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n", "cosmic", "dio"}; // only some are available
     else
-      plotter_->bkgs_ = {"rpc_int", "rpc_ext", "cosmic", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n"}; // only some are available
+      plotter_->bkgs_ = {"pbar", "rpc_int", "rpc_ext", "cosmic", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n"}; // only some are available
     hist_mode_ = 1;
   }
   if(plotter_->init(dataset, tag)) {

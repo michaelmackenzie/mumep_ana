@@ -117,6 +117,7 @@ void init_dataset_info() {
     datasets_["rmc_int_1n"] = DatasetInfo_t(  50000000,  517029, 0.,   1., rate_rmc_ps_1n_80*rmc_int_br_, "rmci1b1s5r0100", "nts.mu2e.RMCPhaseSpace1NInternalMix1BB.MDC2025au_best_v1_1.root");
     datasets_["rpc_ext"]    = DatasetInfo_t(5000000000,  458818, 0.,   1., rate_phys_rpc                , "rpce1b1s5r0100", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
     datasets_["rpc_int"]    = DatasetInfo_t( 125000000, 1899806, 0.,   1., rate_phys_rpc_int            , "rpci1b1s5r0100", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
+    datasets_["pbar"]       = DatasetInfo_t(  30000000, 6461314, 0.,   1., rate_pbar                    , "pbar1b1s5r0100", "nts.mu2e.PbarResamplingMix1BB.MDC2025au_best_v1_1.root");
     datasets_["rmc_ext"] = datasets_["rmc_ext_0n"]; // For now default to just 0 knockout
     datasets_["rmc_int"] = datasets_["rmc_int_0n"];
 

@@ -130,10 +130,11 @@ RooGenericPdf* create_inv_polynomial(RooRealVar& obs, int order, TString name) {
   if     (order == 1) formula = "1/(@1*@0 + @2)";
   else if(order == 2) formula = "1/(@1*@0*@0 + @2*@0 + @3)";
   else if(order == 3) formula = "1/(@1*@0*@0*@0 + @2*@0*@0 + @3*@0 + @4)";
+  else if(order == 4) formula = "1/(@1*@0*@0*@0*@0 + @2*@0*@0*@0 + @3*@0*@0 + @4*@0 + @5)";
   else return nullptr;
   for(int i = 0; i < order+1; ++i) { //N(params) = order + 1
     TString base = Form("%s_inv_order_%i_%i_", name.Data(), order, i);
-    vars.push_back(new RooRealVar(base + "n", base + " norm", 1., -1.e3, 1.e3));
+    vars.push_back(new RooRealVar(base + "n", base + " norm", (i == order) ? 1. : 0.5, -1.e3, 1.e3));
     var_list.add(*vars.back());
   }
   RooGenericPdf* pdf = new RooGenericPdf(Form("%s_inv_pdf_order_%i", name.Data(), order), formula.Data(), var_list);

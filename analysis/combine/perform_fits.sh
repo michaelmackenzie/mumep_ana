@@ -92,7 +92,7 @@ run_fit signal_fit
 run_fit cosmic_fit
 run_fit rpc_ext_fit
 run_fit rpc_int_fit
-if [[ "${EVTANA}" == "" ]]; then
+if [[ 1 ]] || [[ "${EVTANA}" == "" ]]; then
     run_fit pbar_fit
 fi
 if [[ "${PROCESS}" == "mumem" ]]; then

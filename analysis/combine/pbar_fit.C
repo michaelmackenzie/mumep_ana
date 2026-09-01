@@ -6,10 +6,10 @@
 
 int pbar_fit(TString process = "mumem", int selection = 20, TString tag = "", TString pdf_type = "default",
              std::vector<int> shape_sets = {}, std::vector<int> control_region_sets = {}) {
-    if(use_evtana_) {
-        cout << __func__ << ": skipping pbar fit when use_evtana_ is true" << endl;
-        return 0;
-    }
+    // if(use_evtana_) {
+    //     cout << __func__ << ": skipping pbar fit when use_evtana_ is true" << endl;
+    //     return 0;
+    // }
   return fit_component_model(process, selection, tag,
                              "pbar", "Antiproton",
                              pdf_type, -1, "none",
