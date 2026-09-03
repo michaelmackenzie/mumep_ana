@@ -95,7 +95,8 @@ TLatex* Mu2e_lumi(const bool is_data, const double npot = -1., const double live
   logo->DrawLatex(x0, y0, "Mu2e");
   logo->SetTextSize(0.042*scale);
   logo->SetTextFont(52);
-  logo->DrawLatex(x0 + 0.08, y0,  (is_data) ? "Preliminary" : "Simulation");
+  const double r = gPad->GetWh() * 1./ gPad->GetWw();
+  logo->DrawLatex(x0 + 0.1*r, y0,  (is_data) ? "Preliminary" : "Simulation");
   logo->SetTextSize(extraTextSize);
   logo->SetTextFont(132);
   logo->SetTextAlign(31);
