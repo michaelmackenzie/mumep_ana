@@ -163,10 +163,10 @@ void set_style(const TString name, TString& title, int& color) {
     color = kGreen-6;
   } else if(name == "rpc_ext") {
     title = (combine_rpc_) ? "RPC" : "RPC (external)";
-    color = kMagenta-10;
+    color = (combine_rpc_) ? kMagenta-10 : kMagenta-10;
   } else if(name == "rpc_int") {
     title = (combine_rpc_) ? "RPC" : "RPC (internal)";
-    color = kMagenta+1;
+    color = (combine_rpc_) ? kMagenta-10 : kMagenta+1;
   } else if(name.BeginsWith("rmc_ext")) {
     title = (combine_rmc_) ? "RMC" : "RMC (external)";
     color = kAtlantic+2;

@@ -71,10 +71,19 @@ TLatex* Mu2e_lumi(const bool is_data, const double npot = -1., const double live
   const float head_time = livetime / std::pow(10.,std::max(0,ntens_time));
   const int ntens_muons = (nmuons > 0.) ? int(std::log10(nmuons)) : 0;
   const float head_muons = nmuons / std::pow(10.,std::max(0,ntens_muons));
-  TString lumistamp = Form("%.1f x 10^{%i} POT; %.1f x 10^{%i} s; %.1f x 10^{%i} muon stops",
-                           head_pot, ntens_pot,
+  const float energy =  8.*1.602176634e-10; // 8 GeV proton KE in joules
+  float power = (npot > 0. && livetime > 0.) ? energy * (npot / (livetime/0.323))/1000. : 0.; // in kW
+  // hack to round the power
+  if(std::fabs(power - 3.84) < 0.2) power = 3.84;
+  // TString lumistamp = Form("%.1f x 10^{%i} POT; %.1f x 10^{%i} s On-Spill; %.1f x 10^{%i} muon stops",
+  //                          head_pot, ntens_pot,
+  //                          head_time, ntens_time,
+  //                          head_muons, ntens_muons);
+  TString lumistamp = Form("%.3g kW beam; %.1f x 10^{%i} s On-Spill; %.1f x 10^{%i} muon stops",
+                           power,
                            head_time, ntens_time,
                            head_muons, ntens_muons);
+
   float textSize = 0.042 * 1.25 * scale;
   float extraOverTextSize  = 0.76;
   float extraTextSize = extraOverTextSize*textSize;

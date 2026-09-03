@@ -50,7 +50,10 @@ public:
   int debug_        = 0                    ; // for debug printout
   TString figdir_   = "figures/plots"      ; // figure directory for plots
   int stack_signal_ = 0                    ; // include the signal model in the model vs. data comparisons
+  int  signal_fill_ = 0                    ; // fill style for the signal histogram
+  int  signal_width_ = 3                   ; // signal line width
   bool use_offsets_ = true                 ; // use control region offsets and scales
+  bool ratio_plot_  = true                 ; // add ratio pad
   int comp_plot_    = kRatio               ; // ratio or difference plot
   double min_ratio_ = 0.5                  ; // ratio plot range
   double max_ratio_ = 1.5                  ;
@@ -195,26 +198,31 @@ public:
 
   //-------------------------------------------------------------------------------------------------------
   void configure_split_canvas(TPad*& pad1, TPad*& pad2) {
-    pad1 = new TPad("pad1", "pad1", 0., 0.3, 1., 1.0);
+    pad1 = new TPad("pad1", "pad1", 0., (ratio_plot_) ? 0.3 : 0., 1., 1.0);
     pad2 = new TPad("pad2", "pad2", 0., 0.0, 1., 0.3);
     pad1->Draw();
-    pad2->Draw();
-    pad1->SetBottomMargin(0.03); pad1->SetTopMargin(0.10); pad1->SetLeftMargin(0.12); pad1->SetRightMargin(0.09);
+    if(ratio_plot_) pad2->Draw();
+    if(ratio_plot_) pad1->SetBottomMargin(0.03);
+    else            pad1->SetBottomMargin(0.10);
+    pad1->SetTopMargin(0.10); pad1->SetLeftMargin(0.12); pad1->SetRightMargin(0.09);
     pad2->SetBottomMargin(0.35); pad2->SetTopMargin(0.04); pad2->SetLeftMargin(pad1->GetLeftMargin()); pad2->SetRightMargin(pad1->GetRightMargin());
     pad1->SetFillColor(0); pad1->SetTickx(1); pad1->SetTicky(1);
     pad2->SetFillColor(0); pad2->SetTickx(1); pad2->SetTicky(1);
   }
 
   //-------------------------------------------------------------------------------------------------------
-  void style_main_axis(TH1* haxis, const TString& unit, const TString& ytitle = "") {
+  void style_main_axis(TH1* haxis, const TString& unit, const TString& xtitle = "", const TString& ytitle = "", const double scale = 1.) {
     haxis->SetTitle("");
-    haxis->SetXTitle("");
+    if(ratio_plot_) haxis->SetXTitle("");
+    else            haxis->SetXTitle((unit == "") ? xtitle : xtitle + " (" + unit + ")");
     if(ytitle == "") haxis->SetYTitle(Form("Entries / %.2g %s", haxis->GetBinWidth(1), unit.Data()));
     else              haxis->SetYTitle(ytitle);
-    haxis->GetYaxis()->SetLabelSize(0.05);
-    haxis->GetXaxis()->SetLabelSize(0.);
-    haxis->GetYaxis()->SetTitleSize(0.06);
+    haxis->GetYaxis()->SetLabelSize(0.05*scale);
+    haxis->GetXaxis()->SetLabelSize((ratio_plot_) ? 0. : 0.05*scale);
+    haxis->GetYaxis()->SetTitleSize(0.06*scale);
     haxis->GetYaxis()->SetTitleOffset(0.9);
+    haxis->GetXaxis()->SetTitleSize(0.06*scale);
+    haxis->GetXaxis()->SetTitleOffset(0.9);
     haxis->GetXaxis()->SetTitleFont(132);
     haxis->GetYaxis()->SetTitleFont(132);
     haxis->GetXaxis()->SetLabelFont(132);
@@ -305,7 +313,8 @@ public:
           h->SetLineColor(kBlack);
           h->SetLineWidth(1);
         } else if(input.type_ == -1) {
-          h->SetFillStyle(3005);
+          h->SetFillStyle(signal_fill_);
+          h->SetLineWidth(signal_width_);
         } else {
           h->SetFillStyle(0);
         }
@@ -493,7 +502,7 @@ public:
     max_val = max(max_val, max_in_range(bkg_total_up, xmin, xmax));
     if(bkg_total_down) max_val = max(max_val, max_in_range(bkg_total_down, xmin, xmax));
     if(debug_ > 1) cout << "Max val at bkg: " << max_val << endl;
-    style_main_axis(haxis, unit, ytitle);
+    style_main_axis(haxis, unit, xtitle, ytitle);
     haxis->Draw();
     gStyle->SetOptStat(0);
     gStyle->SetOptFit(0);
@@ -546,7 +555,7 @@ public:
     leg->SetTextFont(132);
     if(data) leg->AddEntry(data, "Data", "PL");
     for(auto signal : signals) {
-      leg->AddEntry(signal, signal->GetTitle(), "F");
+      leg->AddEntry(signal, signal->GetTitle(), (signal_fill_ == 0) ? "L" : "F");
     }
     if(stack_signal_) {
       leg->AddEntry(bkg_only , "Background", "L");
@@ -607,13 +616,13 @@ public:
     // Add logo info
     pad1->cd();
     if(draw_logo_) {
-      auto logo = Mu2e_lumi(false, npot_, livetime_, nmuons_);
+      auto logo = Mu2e_lumi(false, npot_, livetime_, nmuons_, (ratio_plot_) ? 1. : 0.7);
       logo->Draw();
     }
 
     // Redraw to get axes on top
     pad1->RedrawAxis();
-    pad2->RedrawAxis();
+    if(ratio_plot_) pad2->RedrawAxis();
 
     return c;
   }
@@ -718,6 +727,7 @@ public:
     TString xtitle     = plot.xtitle_    ;
     TString ytitle     = plot.ytitle_    ;
     TString title      = plot.title_     ;
+    float   scale      = (ratio_plot_) ? 1. : 0.75; // for text scaling
 
     if(debug_ > 0) printf("%s: Plotting stack %s/%s/%i\n", __func__, hist.Data(), type.Data(), selection);
     if(debug_ > 1) printf(" Inputs: xmin = %.1f, xmax = %.1f, unit = %s, xtitle = %s\n",
@@ -773,7 +783,7 @@ public:
     TH1* haxis = (TH1*) ((data) ? data->Clone(axis_name) : backgrounds[0]->Clone(axis_name));
     haxis->Reset();
     haxis->SetLineWidth(0);
-    style_main_axis(haxis, unit, ytitle);
+    style_main_axis(haxis, unit, xtitle, ytitle, scale);
     haxis->Draw();
     gStyle->SetOptStat(0);
     gStyle->SetOptFit(0);
@@ -832,11 +842,11 @@ public:
     TLegend* leg = new TLegend(pad1->GetLeftMargin()+0.03, 1. - pad1->GetTopMargin()-0.21, 1.-pad1->GetRightMargin()-0.02, 1. - pad1->GetTopMargin()-0.03);
     leg->SetNColumns(legend_columns_);
     leg->SetLineWidth(0); leg->SetLineColor(0); leg->SetFillColor(0); leg->SetFillStyle(0);
-    leg->SetTextSize(0.045);
+    leg->SetTextSize(0.045*scale);
     leg->SetTextFont(132);
     if(data) leg->AddEntry(data, "Data", "PL");
     for(auto signal : signals) {
-      leg->AddEntry(signal, signal->GetTitle(), "F");
+      leg->AddEntry(signal, signal->GetTitle(), (signal_fill_ == 0) ? "L" : "F");
     }
     // reverse the order of backgrounds in the legend
     if(!backgrounds.empty()) {
@@ -848,103 +858,105 @@ public:
 
     leg->Draw();
 
-    // Add a ratio plot
-    pad2->cd();
-    TH1* haxis_r = (TH1*) haxis->Clone(Form("axis_r_%s_%s_%i", hist.Data(), type.Data(), selection));
+    if(ratio_plot_) {
+      // Add a ratio plot
+      pad2->cd();
+      TH1* haxis_r = (TH1*) haxis->Clone(Form("axis_r_%s_%s_%i", hist.Data(), type.Data(), selection));
 
-    TH1* hnum = (data) ? (TH1*) data->Clone(Form("data_r_%s_%s_%i", hist.Data(), type.Data(), selection)) :
-      (!signals.empty()) ? (TH1*) signals[0]->Clone(Form("signal_r_%s_%s_%i", hist.Data(), type.Data(), selection)) :
-      nullptr;
-    if(hnum) {
-      haxis_r->Draw();
-      TLine* line(nullptr);
-      if(comp_plot_ == kDifference) {
-        hnum->Add(hbkg_total, -1.);
-        const double max_diff = max_in_range(hnum, xmin, xmax, true);
-        const double min_diff = min_in_range(hnum, xmin, xmax, true, -1.e10);
-        const double diff_buffer = 0.05*(max_diff - min_diff);
-        haxis_r->GetYaxis()->SetRangeUser(min_diff - diff_buffer, max_diff + diff_buffer);
-        haxis_r->SetYTitle((data) ? (stack_signal_) ? "Data - Total" : "Data - Bkg" : "Signal - Bkg");
-      } else {  // default to ratio plot
-        hnum->Divide(hbkg_total);
-        if(data) {
-          haxis_r->GetYaxis()->SetRangeUser(min_ratio_, max_ratio_);
-          line = new TLine(xmin, 1., xmax, 1.);
-          line->SetLineWidth(2);
-          line->SetLineColor(kBlack);
-          line->SetLineStyle(kDashed);
-          line->Draw("same");
-          if(stack_signal_) haxis_r->SetYTitle("Data / Total");
-          else              haxis_r->SetYTitle("Data / Bkg");
-        } else {
-          const double max_ratio = hnum->GetMaximum();
-          haxis_r->GetYaxis()->SetRangeUser(0., 1.1*max_ratio);
-          haxis_r->SetYTitle("Signal / Bkg");
-        }
-      }
-      hnum->Draw("EX0 same");
-      style_ratio_axis(haxis_r, xtitle, unit);
-      if(logx) pad2->SetLogx();
-
-      // Add uncertainty bands
-      if(data) {
-        const int bin_low = (xmin < xmax) ? hbkg_total->FindBin(xmin + 1.e-6) : 1;
-        const int bin_high = (xmin < xmax) ? hbkg_total->FindBin(xmax - 1.e-6) : hbkg_total->GetNbinsX();
-        const int sys_bins = bin_high - bin_low + 1;
-        std::vector<double> sys_x(sys_bins), sys_y(sys_bins), sys_xerr(sys_bins), sys_yerr(sys_bins), stat_yerr(sys_bins);
-        for(int ibin = bin_low; ibin <= bin_high; ++ibin) {
-          double val = hbkg_total->GetBinContent(ibin);
-          double err = hbkg_total->GetBinError  (ibin);
-          const int index = ibin - bin_low;
-          sys_x    [index] = hbkg_total->GetBinCenter(ibin);
-          sys_xerr [index] = hbkg_total->GetBinWidth(ibin)/2.;
-          sys_y    [index] = (comp_plot_ == kDifference) ? 0. : 1.;
-          sys_yerr [index] = 0.; // default value
-          stat_yerr[index] = 0.;
-          if(val <= 0.) continue;
-          if(ad_hoc_sys_) {
-            double val_dio(0.), val_csm(0.), val_rpc(0.), val_beam(0.);
-            for(int iproc = 0; iproc < stack->GetNhists(); ++iproc) {
-              TH1* hproc = (TH1*) stack->GetHists()->At(iproc);
-              const double proc_val = hproc->GetBinContent(ibin);
-              TString proc_name(hproc->GetName());
-              if     (proc_name.Contains("dio"   )) val_dio  += proc_val;
-              else if(proc_name.Contains("cosmic")) val_csm  += proc_val;
-              else if(proc_name.Contains("rpc"))    val_rpc  += proc_val;
-              else                                  val_beam += proc_val;
-            }
-            const double sys = sqrt(pow(0.1*(val_dio+val_rpc+val_beam)/val, 2) + pow(0.2*val_csm/val, 2) + pow(0.025*val_dio/val, 2)
-                                    + pow(0.093*val_rpc/val, 2) + pow(0.27*val_rpc/val,2));
-            if(comp_plot_ == kDifference) sys_yerr[index] = sys*val;
-            else                          sys_yerr[index] = sys;
+      TH1* hnum = (data) ? (TH1*) data->Clone(Form("data_r_%s_%s_%i", hist.Data(), type.Data(), selection)) :
+        (!signals.empty()) ? (TH1*) signals[0]->Clone(Form("signal_r_%s_%s_%i", hist.Data(), type.Data(), selection)) :
+        nullptr;
+      if(hnum) {
+        haxis_r->Draw();
+        TLine* line(nullptr);
+        if(comp_plot_ == kDifference) {
+          hnum->Add(hbkg_total, -1.);
+          const double max_diff = max_in_range(hnum, xmin, xmax, true);
+          const double min_diff = min_in_range(hnum, xmin, xmax, true, -1.e10);
+          const double diff_buffer = 0.05*(max_diff - min_diff);
+          haxis_r->GetYaxis()->SetRangeUser(min_diff - diff_buffer, max_diff + diff_buffer);
+          haxis_r->SetYTitle((data) ? (stack_signal_) ? "Data - Total" : "Data - Bkg" : "Signal - Bkg");
+        } else {  // default to ratio plot
+          hnum->Divide(hbkg_total);
+          if(data) {
+            haxis_r->GetYaxis()->SetRangeUser(min_ratio_, max_ratio_);
+            line = new TLine(xmin, 1., xmax, 1.);
+            line->SetLineWidth(2);
+            line->SetLineColor(kBlack);
+            line->SetLineStyle(kDashed);
+            line->Draw("same");
+            if(stack_signal_) haxis_r->SetYTitle("Data / Total");
+            else              haxis_r->SetYTitle("Data / Bkg");
+          } else {
+            const double max_ratio = hnum->GetMaximum();
+            haxis_r->GetYaxis()->SetRangeUser(0., 1.1*max_ratio);
+            haxis_r->SetYTitle("Signal / Bkg");
           }
-          if(comp_plot_ != kDifference && val > 0.) err /= val;
-          stat_yerr[index] = err;
-          sys_yerr [index] = sqrt(pow(err, 2) + pow(sys_yerr[index], 2)); //stat + sys error
         }
-        TGraphErrors* gsys = new TGraphErrors(sys_bins, sys_x.data(), sys_y.data(), sys_xerr.data(), sys_yerr.data());
-        gsys->SetFillStyle(3004);
-        gsys->SetFillColor(kGray+1);
-        gsys->SetLineWidth(0);
-        gsys->Draw("E2");
-        TGraphErrors* gstat = new TGraphErrors(sys_bins, sys_x.data(), sys_y.data(), sys_xerr.data(), stat_yerr.data());
-        gstat->SetFillStyle(3001);
-        gstat->SetFillColor(kGray+1);
-        gstat->SetLineWidth(0);
-        gstat->Draw("E2");
-        if(line) line->Draw("same"); // redraw to put in the front
         hnum->Draw("EX0 same");
+        style_ratio_axis(haxis_r, xtitle, unit);
+        if(logx) pad2->SetLogx();
+
+        // Add uncertainty bands
+        if(data) {
+          const int bin_low = (xmin < xmax) ? hbkg_total->FindBin(xmin + 1.e-6) : 1;
+          const int bin_high = (xmin < xmax) ? hbkg_total->FindBin(xmax - 1.e-6) : hbkg_total->GetNbinsX();
+          const int sys_bins = bin_high - bin_low + 1;
+          std::vector<double> sys_x(sys_bins), sys_y(sys_bins), sys_xerr(sys_bins), sys_yerr(sys_bins), stat_yerr(sys_bins);
+          for(int ibin = bin_low; ibin <= bin_high; ++ibin) {
+            double val = hbkg_total->GetBinContent(ibin);
+            double err = hbkg_total->GetBinError  (ibin);
+            const int index = ibin - bin_low;
+            sys_x    [index] = hbkg_total->GetBinCenter(ibin);
+            sys_xerr [index] = hbkg_total->GetBinWidth(ibin)/2.;
+            sys_y    [index] = (comp_plot_ == kDifference) ? 0. : 1.;
+            sys_yerr [index] = 0.; // default value
+            stat_yerr[index] = 0.;
+            if(val <= 0.) continue;
+            if(ad_hoc_sys_) {
+              double val_dio(0.), val_csm(0.), val_rpc(0.), val_beam(0.);
+              for(int iproc = 0; iproc < stack->GetNhists(); ++iproc) {
+                TH1* hproc = (TH1*) stack->GetHists()->At(iproc);
+                const double proc_val = hproc->GetBinContent(ibin);
+                TString proc_name(hproc->GetName());
+                if     (proc_name.Contains("dio"   )) val_dio  += proc_val;
+                else if(proc_name.Contains("cosmic")) val_csm  += proc_val;
+                else if(proc_name.Contains("rpc"))    val_rpc  += proc_val;
+                else                                  val_beam += proc_val;
+              }
+              const double sys = sqrt(pow(0.1*(val_dio+val_rpc+val_beam)/val, 2) + pow(0.2*val_csm/val, 2) + pow(0.025*val_dio/val, 2)
+                                      + pow(0.093*val_rpc/val, 2) + pow(0.27*val_rpc/val,2));
+              if(comp_plot_ == kDifference) sys_yerr[index] = sys*val;
+              else                          sys_yerr[index] = sys;
+            }
+            if(comp_plot_ != kDifference && val > 0.) err /= val;
+            stat_yerr[index] = err;
+            sys_yerr [index] = sqrt(pow(err, 2) + pow(sys_yerr[index], 2)); //stat + sys error
+          }
+          TGraphErrors* gsys = new TGraphErrors(sys_bins, sys_x.data(), sys_y.data(), sys_xerr.data(), sys_yerr.data());
+          gsys->SetFillStyle(3004);
+          gsys->SetFillColor(kGray+1);
+          gsys->SetLineWidth(0);
+          gsys->Draw("E2");
+          TGraphErrors* gstat = new TGraphErrors(sys_bins, sys_x.data(), sys_y.data(), sys_xerr.data(), stat_yerr.data());
+          gstat->SetFillStyle(3001);
+          gstat->SetFillColor(kGray+1);
+          gstat->SetLineWidth(0);
+          gstat->Draw("E2");
+          if(line) line->Draw("same"); // redraw to put in the front
+          hnum->Draw("EX0 same");
+        }
+      } else {
+        // Do just a background plot
+        pad1->SetBBoxY1(0.);
+        pad1->Draw();
       }
-    } else {
-      // Do just a background plot
-      pad1->SetBBoxY1(0.);
-      pad1->Draw();
     }
 
     // Add logo info
     pad1->cd();
     if(draw_logo_) {
-      auto logo = Mu2e_lumi(false, npot_, livetime_, nmuons_);
+      auto logo = Mu2e_lumi(false, npot_, livetime_, nmuons_, scale);
       logo->Draw();
     }
 
