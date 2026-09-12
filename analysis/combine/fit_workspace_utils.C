@@ -28,8 +28,8 @@ TString default_pdf_type_for_component(const TString& component) {
   if(c == "rpc_ext") return "auto";
   if(c == "rpc_int") return "auto";
   if(c == "pbar")    return "auto";
-  if(c == "rmc_ext") return "auto";
-  if(c == "rmc_int") return "auto";
+  if(c.BeginsWith("rmc_ext")) return "auto";
+  if(c.BeginsWith("rmc_int")) return "auto";
   return "auto";
 }
 
@@ -38,8 +38,8 @@ TString default_tail_model_for_component(const TString& component) {
   c.ToLower();
   if(c == "signal")  return "exp";
   if(c == "dio")     return "convolution";
-  if(c == "rmc_ext") return "exp";
-  if(c == "rmc_int") return "exp";
+  if(c.BeginsWith("rmc_ext")) return "exp";
+  if(c.BeginsWith("rmc_int")) return "exp";
   return "none";
 }
 

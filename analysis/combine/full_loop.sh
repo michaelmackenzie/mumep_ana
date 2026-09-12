@@ -21,6 +21,7 @@ Help() {
     echo "  FIT_PDF_TYPE, FIT_TAIL_MODEL, FIT_SHAPE_SETS, FIT_CONTROL_SETS"
     echo "  FIT_PDF_TYPE_<COMP>, FIT_TAIL_MODEL_<COMP>, FIT_SHAPE_SETS_<COMP>, FIT_CONTROL_SETS_<COMP>"
     echo "    Components: SIGNAL DIO COSMIC RPC_EXT RPC_INT PBAR RMC_EXT RMC_INT"
+    echo "    mumep splits RMC by neutron knockout: RMC_EXT_0N RMC_EXT_1N RMC_INT_0N RMC_INT_1N"
     echo ""
     echo "Backward-compatible positional mode is still supported:"
     echo "  ./full_loop.sh <process> <selection list> <tag> <skip fits> <skip model> <skip cards> <skip combine> <no sys>"
@@ -118,7 +119,8 @@ for SELECTION in ${SELECTIONS}; do
         [[ "${FIT_TAIL_MODEL:-}" != "" ]] && export FIT_TAIL_MODEL
         [[ "${FIT_SHAPE_SETS:-}" != "" ]] && export FIT_SHAPE_SETS
         [[ "${FIT_CONTROL_SETS:-}" != "" ]] && export FIT_CONTROL_SETS
-        for comp in SIGNAL DIO COSMIC RPC_EXT RPC_INT PBAR RMC_EXT RMC_INT; do
+        for comp in SIGNAL DIO COSMIC RPC_EXT RPC_INT PBAR RMC_EXT RMC_INT \
+                    RMC_EXT_0N RMC_EXT_1N RMC_INT_0N RMC_INT_1N; do
             var="FIT_PDF_TYPE_${comp}";      [[ "${!var:-}" != "" ]] && export "$var"
             var="FIT_TAIL_MODEL_${comp}";    [[ "${!var:-}" != "" ]] && export "$var"
             var="FIT_SHAPE_SETS_${comp}";    [[ "${!var:-}" != "" ]] && export "$var"

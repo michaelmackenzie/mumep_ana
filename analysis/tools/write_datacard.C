@@ -116,6 +116,9 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
     const bool is_rpc    = info.name_.Contains("rpc");
     const bool is_pbar   = info.name_.Contains("pbar");
     const bool is_rmc    = info.name_.Contains("rmc");
+    const bool is_rmc_0n = info.name_.Contains("0n") && is_rmc;
+    const bool is_rmc_1n = info.name_.Contains("1n") && is_rmc;
+    const bool is_int    = info.name_.Contains("_int");
     const int category = (is_signal) ? 0 : ncats;
     bins += Form(" %-10s", obs_name);
     proc_n += Form(" %-10s", info.name_.Data());
@@ -128,6 +131,8 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
       systematics.push_back(Form("%-10s %-4s", "dioN", "lnN"));
       systematics.push_back(Form("%-10s %-4s", "rpcN", "lnN"));
       systematics.push_back(Form("%-10s %-4s", "pbrN", "lnN"));
+      systematics.push_back(Form("%-10s %-4s", "rmcN", "lnN"));
+      systematics.push_back(Form("%-10s %-4s", "intN", "lnN"));
       // systematics.push_back(Form("%-10s %-4s", "rmcN", "lnN"));
     }
     if(!is_cosmic) systematics[0] += Form(" %-10.3f", 1.1);
@@ -140,6 +145,10 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
     else           systematics[3] += Form(" %-10s", "-");
     if(is_pbar   ) systematics[4] += Form(" %-10.3f", 2.0);
     else           systematics[4] += Form(" %-10s", "-");
+    if(is_rmc    ) systematics[5] += Form(" %-10.3f", 1.079);
+    else           systematics[5] += Form(" %-10s", "-");
+    if(is_int    ) systematics[6] += Form(" %-10.3f", 1.045);
+    else           systematics[6] += Form(" %-10s", "-");
     // // Systematics
     // outfile << "lumi   lnN     1.1        1.1         -         1.1        1.1        1.1\n";
     // outfile << "sigN   lnN     1.04        -          -          -          -          -\n";

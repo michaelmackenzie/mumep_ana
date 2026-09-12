@@ -4,6 +4,7 @@
 #include "tools/types.C"
 #include "physics.C"
 #include <map>
+#include <vector>
 
 std::map<TString, DatasetInfo_t> datasets_;
 const char* hist_func_    = "cnv_ana"; // for histogram file naming
@@ -118,7 +119,9 @@ void init_dataset_info() {
     datasets_["rpc_ext"]    = DatasetInfo_t(5000000000,  458818, 0.,   1., rate_phys_rpc                , "rpce1b1s5r0100", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
     datasets_["rpc_int"]    = DatasetInfo_t( 125000000, 1899806, 0.,   1., rate_phys_rpc_int            , "rpci1b1s5r0100", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
     datasets_["pbar"]       = DatasetInfo_t(  30000000, 6461314, 0.,   1., rate_pbar                    , "pbar1b1s5r0100", "nts.mu2e.PbarResamplingMix1BB.MDC2025au_best_v1_1.root");
-    datasets_["rmc_ext"] = datasets_["rmc_ext_0n"]; // For now default to just 0 knockout
+    // mumem keeps a single component per RMC source, taken from the 0 knockout sample
+    // (mumep models the 0n and 1n components separately, see rmc_components)
+    datasets_["rmc_ext"] = datasets_["rmc_ext_0n"];
     datasets_["rmc_int"] = datasets_["rmc_int_0n"];
 
     datasets_["data_mds3c"] = DatasetInfo_t(1.    , 4921433, 0.,   1., 1., "mds3cb1s5r0100", "nts.mu2e.ensembleMDS3cMix1BB.MDC2025ar_best_v1_1.root"              );
@@ -131,6 +134,32 @@ DatasetInfo_t get_dataset_info(TString name) {
   if(datasets_.count(name) != 0) return datasets_[name];
   cout << __func__ << ": No dataset with name " << name.Data() << " found!\n";
   return DatasetInfo_t();
+}
+
+//---------------------------------------------------------------------------------------------------------------------------
+// RMC neutron-knockout handling
+// The mu- --> e+ model splits each RMC source into its 0 and 1 neutron knockout contributions,
+// while mu- --> e- keeps a single component per source (using the 0n sample).
+bool split_rmc_knockout(const TString process) {
+  return process == "mumep";
+}
+
+// Component names to include for an RMC source ("rmc_ext" or "rmc_int")
+std::vector<TString> rmc_components(const TString process, const TString base) {
+  if(split_rmc_knockout(process)) return {base + "_0n", base + "_1n"};
+  return {base};
+}
+
+// Knockout label ("0n"/"1n") of a component name, "" if it isn't knockout-split
+TString rmc_knockout(const TString component) {
+  if(component.EndsWith("_0n")) return "0n";
+  if(component.EndsWith("_1n")) return "1n";
+  return "";
+}
+
+// Component name for an RMC source and knockout label
+TString rmc_component_name(const TString base, const TString knockout) {
+  return (knockout == "") ? base : base + "_" + knockout;
 }
 
 //---------------------------------------------------------------------------------------------------------------------------
@@ -168,11 +197,13 @@ void set_style(const TString name, TString& title, int& color) {
     title = (combine_rpc_) ? "RPC" : "RPC (internal)";
     color = (combine_rpc_) ? kMagenta-10 : kMagenta+1;
   } else if(name.BeginsWith("rmc_ext")) {
-    title = (combine_rmc_) ? "RMC" : "RMC (external)";
-    color = kAtlantic+2;
+    const TString knockout = rmc_knockout(name);
+    title = (combine_rmc_) ? "RMC" : ((knockout == "") ? "RMC (external)" : Form("RMC %s (external)", knockout.Data()));
+    color = (knockout == "1n") ? kAtlantic+3 : kAtlantic+2;
   } else if(name.BeginsWith("rmc_int")) {
-    title = (combine_rmc_) ? "RMC" : "RMC (internal)";
-    color = kAtlantic;
+    const TString knockout = rmc_knockout(name);
+    title = (combine_rmc_) ? "RMC" : ((knockout == "") ? "RMC (internal)" : Form("RMC %s (internal)", knockout.Data()));
+    color = (knockout == "1n") ? kAtlantic+1 : kAtlantic;
   } else if(name.BeginsWith("mnbs")) {
     title = "Pileup";
     color = kRed;

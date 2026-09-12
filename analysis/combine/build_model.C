@@ -23,11 +23,13 @@ struct RateUnc_t {
 
 std::vector<RateUnc_t> rate_uncertainties(TString process) {
   std::vector<RateUnc_t> sys;
-  sys.push_back(RateUnc_t("lumi"  , 0.1  , true           ));
-  sys.push_back(RateUnc_t("cosmic", 0.2  , false, "cosmic"));
-  sys.push_back(RateUnc_t("dio"   , 0.025, false, "dio"   ));
-  sys.push_back(RateUnc_t("rpc"   , 0.27 , false, "rpc"   ));
-  sys.push_back(RateUnc_t("pbar"  , 1.   , false, "pbar"  ));
+  sys.push_back(RateUnc_t("lumi"  , 0.1  , true               ));
+  sys.push_back(RateUnc_t("cosmic", 0.2  , false, "cosmic"    ));
+  sys.push_back(RateUnc_t("dio"   , 0.025, false, "dio"       ));
+  sys.push_back(RateUnc_t("rpc"   , 0.27 , false, "rpc"       ));
+  sys.push_back(RateUnc_t("pbar"  , 1.   , false, "pbar"      ));
+  sys.push_back(RateUnc_t("rmc"   , 0.079, false, "rmc"       )); // 1.40 +- 0.11 (TRIUMF, 1999)
+  sys.push_back(RateUnc_t("rmc"   , 0.045, false, "rmc_int"   )); // 0.0069 ± 0.00031
   return sys;
 }
 
@@ -648,9 +650,9 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   printf("N(POT)   = %.1e\n", npot_);
   printf("Livetime = %.1e s\n", livetime_);
   printf("N(muons) = %.1e\n", nmuons_);
-  printf("%-10s (%-15s): Rate = %.4f\n", signal_model.name_.Data(), signal_model.title_.Data(), signal_model.rate_);
+  printf("%-10s (%-20s): Rate = %.4f\n", signal_model.name_.Data(), signal_model.title_.Data(), signal_model.rate_);
   for(auto& bkg : background_model)
-    printf("%-10s (%-15s): Rate = %.4f\n", bkg.name_.Data(), bkg.title_.Data(), bkg.rate_);
+    printf("%-10s (%-20s): Rate = %.4f\n", bkg.name_.Data(), bkg.title_.Data(), bkg.rate_);
   printf("----------------------------------------------\n");
   return 0;
 }

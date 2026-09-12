@@ -256,9 +256,27 @@ int print_stack(vector<TDirectoryFile*> dirs, TString tag, TString outdir) {
     titles = {"Antiproton", "External RPC", "Internal RPC", "Cosmic ray", "DIO"};
     colors = {kGreen-6    , kMagenta-10   , kMagenta+1    , kOrange     , kRed-7};
   } else {
-    names  = {"pbar"      , "rpc_ext"     , "rpc_int"     , "cosmic"    , "rmc_ext"       , "rmc_int"       };
-    titles = {"Antiproton", "External RPC", "Internal RPC", "Cosmic ray", "RMC (external)", "RMC (internal)"};
-    colors = {kGreen-6    , kMagenta-10   , kMagenta+1    , kOrange     , kAtlantic+2     , kAtlantic       };
+    names  = {"pbar"      , "rpc_ext"     , "rpc_int"     , "cosmic"    };
+    titles = {"Antiproton", "External RPC", "Internal RPC", "Cosmic ray"};
+    colors = {kGreen-6    , kMagenta-10   , kMagenta+1    , kOrange     };
+    // RMC is split by neutron knockout (0n/1n) in the mumep model and is a single component
+    // per source otherwise, so only add the variants present in the fit output
+    auto has_hist = [&](const char* name) {
+      for(auto dir : dirs) if(!dir->Get(name)) return false;
+      return true;
+    };
+    const vector<TString> rmc_names  = {"rmc_ext"       , "rmc_ext_0n"       , "rmc_ext_1n"       ,
+                                        "rmc_int"       , "rmc_int_0n"       , "rmc_int_1n"       };
+    const vector<TString> rmc_titles = {"RMC (external)", "RMC 0n (external)", "RMC 1n (external)",
+                                        "RMC (internal)", "RMC 0n (internal)", "RMC 1n (internal)"};
+    const vector<int>     rmc_colors = {kAtlantic+2     , kAtlantic+2        , kAtlantic+3        ,
+                                        kAtlantic       , kAtlantic          , kAtlantic+1        };
+    for(unsigned i = 0; i < rmc_names.size(); ++i) {
+      if(!has_hist(rmc_names[i].Data())) continue;
+      names .push_back(rmc_names [i]);
+      titles.push_back(rmc_titles[i]);
+      colors.push_back(rmc_colors[i]);
+    }
   }
   for(unsigned i = 0; i < names.size(); ++i) {
     TString name = names[i];

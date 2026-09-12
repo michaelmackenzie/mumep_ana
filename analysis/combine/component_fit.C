@@ -12,8 +12,8 @@ TString component_dataset_key(const TString& component, const TString& process) 
   TString c = component;
   c.ToLower();
   if(c == "signal") return process;
-  if(c == "rmc_ext") return "rmc_ext_0n";
-  return c;
+  if(c == "rmc_ext") return "rmc_ext_0n"; // unsplit RMC uses the 0 neutron knockout sample
+  return c; // the knockout-split components are named after their datasets
 }
 
 RooAbsPdf* component_analytic_pdf(const TString& component,
@@ -28,8 +28,8 @@ RooAbsPdf* component_analytic_pdf(const TString& component,
   if(c == "pbar")    return get_pbar_model   (obs, process, selection, false).pdf_;
   if(c == "rpc_ext") return get_rpc_ext_model(obs, process, selection, false).pdf_;
   if(c == "rpc_int") return get_rpc_int_model(obs, process, selection, false).pdf_;
-  if(c == "rmc_ext") return get_rmc_ext_model(obs, process, selection, false).pdf_;
-  if(c == "rmc_int") return get_rmc_int_model(obs, process, selection, false).pdf_;
+  if(c.BeginsWith("rmc_ext")) return get_rmc_ext_model(obs, process, selection, false, rmc_knockout(c)).pdf_;
+  if(c.BeginsWith("rmc_int")) return get_rmc_int_model(obs, process, selection, false, rmc_knockout(c)).pdf_;
   return nullptr;
 }
 
@@ -307,7 +307,7 @@ int fit_component_model(TString process,
     frame->GetYaxis()->SetRangeUser(1.e-2*ymax, 10.*ymax);
   } else if(component == "dio") {
     frame->GetYaxis()->SetRangeUser(1.e-5, 1.e3*npot_/3.6e20);
-  } else if(component == "rmc_ext") {
+  } else if(component.BeginsWith("rmc_ext")) {
     frame->GetYaxis()->SetRangeUser(0., 1.2*ymax);
   }
 
@@ -333,9 +333,9 @@ int fit_component_model(TString process,
     if(save_fit_plot_pair(c, frame, out_base, 1.e-5, 1.e4*npot_/3.6e20)) return 10;
   } else if(component == "signal") {
     if(save_fit_plot_pair(c, frame, out_base, 1.e-5*ymax, 5.*ymax)) return 10;
-  } else if(component == "rmc_ext") {
+  } else if(component.BeginsWith("rmc_ext")) {
     if(save_fit_plot_pair(c, frame, out_base, 5.e-3*ymax, 10.*ymax)) return 10;
-  } else if(component == "rmc_int") {
+  } else if(component.BeginsWith("rmc_int")) {
     if(save_fit_plot_pair(c, frame, out_base, 1.e-5, 10.*ymax)) return 10;
   } else {
     if(save_fit_plot_pair(c, frame, out_base)) return 10;

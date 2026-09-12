@@ -371,26 +371,16 @@ pdf_info get_rpc_int_model(RooRealVar& obs, TString process, int selection, cons
 }
 
 //---------------------------------------------------------------------------------------------------------------------------
-pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, const bool freeze = true) {
+pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, const bool freeze = true,
+                           TString knockout = "") {
 
   pdf_info res;
 
-  const char* name = Form("%s_%i_rmc_ext", process.Data(), selection);
+  const TString component = rmc_component_name("rmc_ext", knockout);
+  const char* name = Form("%s_%i_%s", process.Data(), selection, component.Data());
   RooAbsPdf* pdf;
 
   if(process == "mumep") {
-    // RooRealVar* p0 = new RooRealVar(Form("%s_p0", name), "p0", 0.1, -1., 1.);
-    // RooRealVar* p1 = new RooRealVar(Form("%s_p1", name), "p1", 0.1, -1., 1.);
-    // RooRealVar* p2 = new RooRealVar(Form("%s_p1", name), "p1", 0.1, -1., 1.);
-    // pdf = new RooChebychev(Form("%s_pdf", name), "RMC (external) background", obs, RooArgList(*p0, *p1, *p2));
-    // if(freeze) {
-    //   p0->setConstant(true);
-    //   p1->setConstant(true);
-    //   p2->setConstant(true);
-    // }
-    // pdf = create_exponential(obs, 2, name);
-    // pdf = create_powerlaw(obs, 2, name);
-    // pdf = create_inv_polynomial(obs, 3, name);
     pdf = create_gaus_poly_pdf(obs, 1, name);
     pdf->SetName(Form("%s_pdf", name));
   } else {
@@ -416,34 +406,25 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
 
   res.pdf_   = pdf;
   res.rate_  = 50.; // rough starting point
-  res.color_ = kAtlantic+2;
-  res.name_  = "rmc_ext";
-  res.title_ = "RMC (external)";
+  res.name_  = component;
+  set_style(component, res.title_, res.color_);
 
   return res;
 }
 
 //---------------------------------------------------------------------------------------------------------------------------
-pdf_info get_rmc_int_model(RooRealVar& obs, TString process, int selection, const bool freeze = true) {
+pdf_info get_rmc_int_model(RooRealVar& obs, TString process, int selection, const bool freeze = true,
+                           TString knockout = "") {
 
   pdf_info res;
 
-  const char* name = Form("%s_%i_rmc_int", process.Data(), selection);
+  const TString component = rmc_component_name("rmc_int", knockout);
+  const char* name = Form("%s_%i_%s", process.Data(), selection, component.Data());
   RooAbsPdf* pdf;
 
   if(process == "mumep") {
-    // RooRealVar* p0 = new RooRealVar(Form("%s_p0", name), "p0", 0.1, -1., 1.);
-    // RooRealVar* p1 = new RooRealVar(Form("%s_p1", name), "p1", 0.1, -1., 1.);
-    // RooRealVar* p2 = new RooRealVar(Form("%s_p1", name), "p2", 0.1, -1., 1.);
-    // RooRealVar* p3 = new RooRealVar(Form("%s_p3", name), "p3", 0.1, -1., 1.);
-    // pdf = new RooChebychev(Form("%s_pdf", name), "RMC (internal) background", obs, RooArgList(*p0, *p1, *p2, *p3));
-    // if(freeze) {
-    //   p0->setConstant(true);
-    //   p1->setConstant(true);
-    //   p2->setConstant(true);
-    //   p3->setConstant(true);
-    // }
     pdf = create_gaus_poly_pdf(obs, 1, name);
+    pdf->SetName(Form("%s_pdf", name));
   } else {
 
     RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);
@@ -467,9 +448,8 @@ pdf_info get_rmc_int_model(RooRealVar& obs, TString process, int selection, cons
 
   res.pdf_   = pdf;
   res.rate_  = 50.; // rough starting point
-  res.color_ = kAtlantic;
-  res.name_  = "rmc_int";
-  res.title_ = "RMC (internal)";
+  res.name_  = component;
+  set_style(component, res.title_, res.color_);
 
   return res;
 }
@@ -489,12 +469,15 @@ pdf_infos get_background_model(RooRealVar& obs, TString process, const int selec
   pdfs.push_back(read_model("rpc_ext", process, selection, tag));
   pdfs.push_back(read_model("rpc_int", process, selection, tag));
   pdfs.push_back(read_model("pbar", process, selection, tag));
-  if(!use_evtana_) {
-
-  } else {
-    pdfs.push_back(read_model("rmc_ext", process, selection, tag));
+  if(use_evtana_) {
+    // mumep splits each RMC source into its 0n and 1n neutron knockout components
+    for(const auto& comp : rmc_components(process, "rmc_ext")) {
+      pdfs.push_back(read_model(comp, process, selection, tag));
+    }
     if(!is_mumem) {
-      pdfs.push_back(read_model("rmc_int", process, selection, tag));
+      for(const auto& comp : rmc_components(process, "rmc_int")) {
+        pdfs.push_back(read_model(comp, process, selection, tag));
+      }
     }
   }
 

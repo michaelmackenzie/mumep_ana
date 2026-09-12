@@ -12,6 +12,7 @@ Help() {
     echo "  FIT_PDF_TYPE_<COMP> Component PDF override, e.g. FIT_PDF_TYPE_SIGNAL=cb"
     echo "  FIT_TAIL_MODEL_<COMP> Component tail override for signal/dio/rmc_ext/rmc_int"
     echo "    Components: SIGNAL, DIO, COSMIC, RPC_EXT, RPC_INT, PBAR, RMC_EXT, RMC_INT"
+    echo "    mumep splits RMC by neutron knockout: RMC_EXT_0N, RMC_EXT_1N, RMC_INT_0N, RMC_INT_1N"
     echo "  FIT_SHAPE_SETS      Global comma-separated shape set override"
     echo "  FIT_SHAPE_SETS_<COMP> Component shape set override"
     echo "  FIT_CONTROL_SETS    Global comma-separated control-region set override"
@@ -36,8 +37,12 @@ if [[ "${SELECTION}" == "" ]]; then
     SELECTION="20"
 fi
 
+# run_fit <macro> [knockout]
+# knockout ("0n"/"1n") is only used by the RMC macros; the component used for the
+# FIT_* environment overrides then becomes e.g. RMC_EXT_0N
 run_fit() {
     local macro=$1
+    local knockout=${2:-}
     local component=""
     local pdf_default="${FIT_PDF_TYPE:-default}"
     local tail_default="${FIT_TAIL_MODEL:-default}"
@@ -54,6 +59,9 @@ run_fit() {
         rmc_ext_fit) component="RMC_EXT" ;;
         rmc_int_fit) component="RMC_INT" ;;
     esac
+    if [[ "${knockout}" != "" ]]; then
+        component="${component}_${knockout^^}"
+    fi
 
     local pdf_var="FIT_PDF_TYPE_${component}"
     local tail_var="FIT_TAIL_MODEL_${component}"
@@ -80,7 +88,7 @@ run_fit() {
     elif [[ "${macro}" == "cosmic_fit" ]]; then
         root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", -1, \"${pdf}\", ${ctrl_vec})"
     elif [[ "${macro}" == "rmc_ext_fit" ]] || [[ "${macro}" == "rmc_int_fit" ]]; then
-        root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", \"${pdf}\", \"${tail}\", ${shape_vec}, ${ctrl_vec})"
+        root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", \"${pdf}\", \"${tail}\", ${shape_vec}, ${ctrl_vec}, \"${knockout}\")"
     elif [[ "${macro}" == "rpc_ext_fit" ]] || [[ "${macro}" == "rpc_int_fit" ]] || [[ "${macro}" == "pbar_fit" ]]; then
         root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", \"${pdf}\", ${shape_vec}, ${ctrl_vec})"
     else
@@ -99,8 +107,11 @@ if [[ "${PROCESS}" == "mumem" ]]; then
     run_fit dio_fit
 fi
 if [[ "${PROCESS}" == "mumep" ]]; then
-    run_fit rmc_int_fit
-    run_fit rmc_ext_fit
+    # mumep models the 0 and 1 neutron knockout RMC contributions separately
+    for KNOCKOUT in 0n 1n; do
+        run_fit rmc_int_fit "${KNOCKOUT}"
+        run_fit rmc_ext_fit "${KNOCKOUT}"
+    done
 elif [[ "${EVTANA}" != "" ]]; then
     run_fit rmc_int_fit
     run_fit rmc_ext_fit

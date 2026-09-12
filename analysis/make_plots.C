@@ -66,7 +66,7 @@ int print_dataset_info(const int selection) {
 }
 
 //---------------------------------------------------------------------------------------------------
-int make_plots(const bool mumem = true, vector<int> sets = {7, 10, 20}, TString dataset = "mds3c", TString tag = "r0102") {
+int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dataset = "mds3c", TString tag = "r0102") {
   if(plotter_) {
     delete plotter_;
     plotter_ = nullptr;
@@ -107,7 +107,7 @@ int make_plots(const bool mumem = true, vector<int> sets = {7, 10, 20}, TString 
   const double base_br(signal_br_);
   plotter_->update_signal_br(signal_br_);
   plotter_->use_offsets_ = false; //don't use control regions for initial counts
-  plotter_->ratio_plot_ = mds; // only do ratio plot with data
+  plotter_->ratio_plot_ = !mumem || mds; // only do ratio plot with data
   print_proc_info(0);
   print_proc_info(6);
   if(use_evtana_) print_dataset_info(60);
@@ -137,7 +137,7 @@ int make_plots(const bool mumem = true, vector<int> sets = {7, 10, 20}, TString 
       c = plotter_->print_stack(plot_t("d0"             , "trk", set, 5, -200., 200., 1., -1., logy, false, "D_{0}", "mm")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("rMax"           , "trk", set, 5, 350., 800. , 1., -1., logy, false, "R_{max}", "mm")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("tanDip"         , "trk", set, 5, 1.  , -1.  , 1., -1., logy, false, "tan(dip)", "")); if(!c) ++status; else Empty_Canvas(c);
-      c = plotter_->print_stack(plot_t("cosTheta"       , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "cos(#theta)", "")); if(!c) ++status; else Empty_Canvas(c);
+      c = plotter_->print_stack(plot_t("cosTheta"       , "trk", set, 2, 0.4 ,  0.9 , 1., -1., logy, false, "cos(#theta)", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("trkQual"        , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "track quality", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("trkQual_1"      , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "track quality", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("pid"            , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "PID", "")); if(!c) ++status; else Empty_Canvas(c);

@@ -49,6 +49,9 @@ If not provided, `cosmic_fit` defaults to `{selection + 1000}`.
 Supported `<COMP>` values:
 `SIGNAL DIO COSMIC RPC_EXT RPC_INT PBAR RMC_EXT RMC_INT`
 
+For `mumep` the RMC components are split by neutron knockout, so the RMC overrides use
+`RMC_EXT_0N RMC_EXT_1N RMC_INT_0N RMC_INT_1N` instead of `RMC_EXT`/`RMC_INT`.
+
 Example:
 
 ```bash
