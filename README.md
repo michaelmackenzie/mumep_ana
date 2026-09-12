@@ -26,6 +26,7 @@ git clone https://github.com/Mu2e/Production.git
 git clone https://github.com/Mu2e/EventNtuple.git
 git clone https://github.com/Mu2e/ArtAnalysis.git
 git clone https://github.com/Mu2e/MLTrain.git
+git clone https://github.com/Mu2e/EventDisplay.git
 git clone https://github.com/michaelmackenzie/grim.git
 ```
 
