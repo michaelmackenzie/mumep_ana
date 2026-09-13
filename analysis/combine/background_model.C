@@ -378,11 +378,16 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
 
   const TString component = rmc_component_name("rmc_ext", knockout);
   const char* name = Form("%s_%i_%s", process.Data(), selection, component.Data());
-  RooAbsPdf* pdf;
+  RooAbsPdf* pdf = nullptr;
 
   if(process == "mumep") {
-    pdf = create_gaus_poly_pdf(obs, 1, name);
-    pdf->SetName(Form("%s_pdf", name));
+    if(knockout == "1n") {
+      pdf = create_exponential(obs, 1, name);
+      pdf->SetName(Form("%s_pdf", name));
+    } else {
+      pdf = create_gaus_poly_pdf(obs, 1, name);
+      pdf->SetName(Form("%s_pdf", name));
+    }
   } else {
 
     RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.); x0->setConstant(true);

@@ -198,11 +198,11 @@ void set_style(const TString name, TString& title, int& color) {
     color = (combine_rpc_) ? kMagenta-10 : kMagenta+1;
   } else if(name.BeginsWith("rmc_ext")) {
     const TString knockout = rmc_knockout(name);
-    title = (combine_rmc_) ? "RMC" : ((knockout == "") ? "RMC (external)" : Form("RMC %s (external)", knockout.Data()));
+    title = (combine_rmc_) ? "RMC" : ((knockout == "") ? "RMC (external)" : Form("RMC (%s-ext)", knockout.Data()));
     color = (knockout == "1n") ? kAtlantic+3 : kAtlantic+2;
   } else if(name.BeginsWith("rmc_int")) {
     const TString knockout = rmc_knockout(name);
-    title = (combine_rmc_) ? "RMC" : ((knockout == "") ? "RMC (internal)" : Form("RMC %s (internal)", knockout.Data()));
+    title = (combine_rmc_) ? "RMC" : ((knockout == "") ? "RMC (internal)" : Form("RMC (%s-int)", knockout.Data()));
     color = (knockout == "1n") ? kAtlantic+1 : kAtlantic;
   } else if(name.BeginsWith("mnbs")) {
     title = "Pileup";

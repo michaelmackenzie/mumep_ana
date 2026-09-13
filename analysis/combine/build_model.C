@@ -350,6 +350,11 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     print_model(figdir, selection, obs, data, signal_model, background_model, process == "mumem");
   }
 
+  // Build the envelope for mu- --> e+, if requested
+  std::vector<TString> explicit_processes = {"cosmic"}; // Processes to model outside of the envelope
+  double p_blind_min = 90.;
+  double p_blind_max = 93.;
+
   // Open the output file
   gSystem->Exec("[ ! -d workspaces ] && mkdir workspaces");
   TString ws_file = Form("workspaces/workspace_%s_%i%s.root", process.Data(), selection, (tag != "") ? ("_"+tag).Data() : "");

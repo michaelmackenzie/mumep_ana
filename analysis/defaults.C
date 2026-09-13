@@ -9,6 +9,7 @@ bool         run1a_range_ = false; // Use Run 1A paper range (only in EvtAna mod
 bool         include_t0_  = true ; // Add t0 histograms to the output
 bool         do_2d_fit_   = false; // Perform a (p, t) fit instead of a 1D p fit
 bool         unbinned_    = false; // Perform unbinned fits
+bool         use_env_     = true ; // Model the mu- --> e+ background with an envelope
 
 // Histogram file info
 int          hist_mode_   = 2;
