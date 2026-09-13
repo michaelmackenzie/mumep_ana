@@ -1,7 +1,7 @@
 //Plot data from many  Higgs Combine FitDiagnostics toys
 
 int plot_combine_fits(const char* file_name, double r_true = 0., TString out_name = "",
-                      const int skip_bad_fits = 2, const int err_mode = 0) {
+                      const int skip_bad_fits = 0, const int err_mode = 0) {
 
   /////////////////////////////////////////////////////////////////
   // Retrieve the fit data

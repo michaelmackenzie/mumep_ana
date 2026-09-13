@@ -340,7 +340,7 @@ int fit_component_model(TString process,
   } else {
     if(save_fit_plot_pair(c, frame, out_base)) return 10;
   }
-  pdf->Print("v");
+  pdf->Print("tree");
 
   const TString suffix = (isys < 0) ? "" : Form("_sys_%i", isys);
   TH1* h_smoothed_for_ws = did_smooth ? h : nullptr;

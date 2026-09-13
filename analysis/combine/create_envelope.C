@@ -13,14 +13,14 @@ bool useFrameChiSq_         = false; //use a roo plot frame to evaluate chi^2
 bool useManualChisq_        = true ; //calcuate chi^2 values by hand with histograms
 bool useDataBinErrors_      = false; //use data bin errors when calculating chi^2
 
-bool use_exp_family_        = true ; //exp(x)
-bool use_power_family_      = true ; //x^p
+bool use_exp_family_        = false; //exp(x)
+bool use_power_family_      = false; //x^p
 bool use_laurent_family_    = false; //Laurent
 bool use_inv_poly_family_   = false; //1/(polynomial)
 bool use_poly_family_       = true ; //polynomial
 bool use_gaus_poly_family_  = true ; //Gaussian + polynomial
 bool use_gaus_expo_family_  = false; //Gaussian + exp(x)
-bool use_gaus_power_family_ = true ; //Gaussian + x^p
+bool use_gaus_power_family_ = false; //Gaussian + x^p
 bool use_generic_bernstein_ = false;
 bool use_fast_bernstein_    = false;
 
