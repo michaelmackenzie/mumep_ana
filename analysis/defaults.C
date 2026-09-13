@@ -10,6 +10,8 @@ bool         include_t0_  = true ; // Add t0 histograms to the output
 bool         do_2d_fit_   = false; // Perform a (p, t) fit instead of a 1D p fit
 bool         unbinned_    = false; // Perform unbinned fits
 bool         use_env_     = true ; // Model the mu- --> e+ background with an envelope
+bool         blind_data_  = true ; // Blind the signal region when evaluating envelope fits
+int          verbose_     = 1    ; // Printout level for the envelope construction
 
 // Histogram file info
 int          hist_mode_   = 2;
@@ -23,7 +25,7 @@ double       t_bin_width_ =   25.;  // Time distribution bin width
 double       xmin_em_     =  100.;  // Momentum range for mu- --> e- fit
 double       xmax_em_     =  110.;
 double       xmin_ep_     =   87.;  // Momentum range for mu- --> e+ fit
-double       xmax_ep_     =   97.;
+double       xmax_ep_     =   95.;
 double       t_min_       =  475.;  // Time range for 2D fits
 double       t_max_       = 1650.;
 

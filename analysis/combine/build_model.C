@@ -5,6 +5,7 @@
 #include "background_model.C"
 #include "../physics.C"
 #include "systematics.C"
+#include "create_envelope.C"
 #include "../tools/write_datacard.C"
 // #include "combine/HiggsAnalysis/CombinedLimit/src/RooLandauCB.cc"
 
@@ -344,16 +345,61 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     }
   }
 
+  // Build the envelope for mu- --> e+, if requested
+  // std::vector<TString> explicit_processes = {"cosmic"}; // Processes to model outside of the envelope
+  std::vector<TString> explicit_processes = {}; // Processes to model outside of the envelope
+  double p_blind_min = 90.;
+  double p_blind_max = 93.;
+  envelope_t envelope;
+  if(use_env_ && process == "mumep") {
+    auto data_hist = dynamic_cast<RooDataHist*>(data);
+    if(!data_hist) {
+      cout << __func__ << ": The background envelope requires binned data (unbinned_ = false)!\n";
+      return 1;
+    }
+
+    // Split the background model into the processes modeled explicitly and the ones the
+    // envelope absorbs into its data-driven shape
+    auto is_explicit = [&](const TString& name) {
+      for(auto& proc : explicit_processes) if(proc == name) return true;
+      return false;
+    };
+    std::vector<pdf_info> explicit_model;
+    for(auto& bkg : background_model) {
+      if(is_explicit(bkg.name_)) explicit_model.push_back(bkg);
+    }
+    if(explicit_model.size() != explicit_processes.size()) {
+      cout << __func__ << ": Only found " << explicit_model.size() << " / " << explicit_processes.size()
+           << " explicitly modeled processes in the background model!\n";
+      return 1;
+    }
+
+    envelope = build_background_envelope(obs, *data_hist, explicit_model,
+                                         Form("%s_%i_env", process.Data(), selection),
+                                         p_blind_min, p_blind_max, verbose_, figdir);
+    if(!envelope.pdf_ || !envelope.norm_) {
+      cout << __func__ << ": Failed to build the background envelope!\n";
+      return 1;
+    }
+
+    // The envelope stands in for every background it absorbed, alongside the explicit ones
+    pdf_info env_info;
+    env_info.pdf_   = envelope.pdf_;
+    env_info.norm_  = envelope.norm_;
+    env_info.rate_  = envelope.rate_;
+    env_info.name_  = "env";
+    env_info.title_ = envelope.title_;
+    env_info.color_ = kGray;
+    env_info.hist_  = envelope.pdf_->createHistogram(Form("%s_%i_env_hist", process.Data(), selection), obs);
+    background_model = explicit_model;
+    background_model.push_back(env_info);
+  }
+
   // Draw the inputs
   if(print_) {
     gSystem->Exec(Form("[ ! -d %s ] && mkdir -p %s", figdir.Data(), figdir.Data()));
     print_model(figdir, selection, obs, data, signal_model, background_model, process == "mumem");
   }
-
-  // Build the envelope for mu- --> e+, if requested
-  std::vector<TString> explicit_processes = {"cosmic"}; // Processes to model outside of the envelope
-  double p_blind_min = 90.;
-  double p_blind_max = 93.;
 
   // Open the output file
   gSystem->Exec("[ ! -d workspaces ] && mkdir workspaces");
@@ -476,6 +522,9 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
       ws.import(*bkg.pdf_); ws.import(*bkg.norm_);
       bkg.hist_->Write();
     }
+    // Combine profiles over the envelope function choice using this index; importing the
+    // RooMultiPdf already pulls it in, so only add it if it somehow did not come along
+    if(envelope.cat_ && !ws.cat(envelope.cat_->GetName())) ws.import(*envelope.cat_);
   }
 
   if(do_2d_fit_) {
@@ -576,8 +625,13 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     // construct the card info list
     std::vector<card_info_t> card_info;
     card_info.push_back(card_info_t(signal_model.name_, signal_model.rate_, selection));
-    for(auto& bkg : background_model) card_info.push_back(card_info_t(bkg.name_, bkg.rate_, selection));
-    if(write_datacard(process, card_info, ws_file, sys_map)) {
+    for(auto& bkg : background_model) {
+      const bool floating = envelope.pdf_ && bkg.pdf_ == envelope.pdf_;
+      card_info.push_back(card_info_t(bkg.name_, bkg.rate_, selection, floating));
+    }
+    std::vector<TString> extra_lines;
+    if(envelope.cat_) extra_lines.push_back(Form("%-10s discrete", envelope.cat_->GetName()));
+    if(write_datacard(process, card_info, ws_file, sys_map, "", extra_lines)) {
       cout << __func__ << ": Data card writing failed!\n";
       return 1;
     }

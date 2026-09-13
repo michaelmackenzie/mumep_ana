@@ -2,6 +2,24 @@
 #define __MUMEP_ANA_TOOLS_FAMILIES__
 // Return a given order of a function family
 
+#include <memory>
+
+//------------------------------------------------------------------------------------------------------------------
+//Count the floating shape parameters of a PDF, excluding the observable and any normalization
+//variable (callers account for the normalization separately when forming N(dof))
+int count_pdf_params(RooAbsPdf* pdf, RooRealVar& obs) {
+  if(!pdf) return 0;
+  std::unique_ptr<RooArgSet> params(pdf->getParameters(RooArgSet(obs)));
+  int nfree = 0;
+  for(auto param : *params) {
+    auto var = dynamic_cast<RooRealVar*>(param);
+    if(!var || var->isConstant()) continue;
+    if(TString(var->GetName()).EndsWith("_norm")) continue;
+    ++nfree;
+  }
+  return nfree;
+}
+
 //------------------------------------------------------------------------------------------------------------------
 //Create an exponential PDF sum
 RooAbsPdf* create_exponential(RooRealVar& obs, const int order, TString name) {
@@ -127,10 +145,10 @@ RooGenericPdf* create_inv_polynomial(RooRealVar& obs, int order, TString name) {
   var_list.add(obs);
   TString formula = "";
   //define the formula for fixed orders
-  if     (order == 1) formula = "1/(@1*@0 + @2)";
-  else if(order == 2) formula = "1/(@1*@0*@0 + @2*@0 + @3)";
-  else if(order == 3) formula = "1/(@1*@0*@0*@0 + @2*@0*@0 + @3*@0 + @4)";
-  else if(order == 4) formula = "1/(@1*@0*@0*@0*@0 + @2*@0*@0*@0 + @3*@0*@0 + @4*@0 + @5)";
+  if     (order == 1) formula = "1/(max(1.e-10, @1*@0 + @2))";
+  else if(order == 2) formula = "1/(max(1.e-10, @1*@0*@0 + @2*@0 + @3))";
+  else if(order == 3) formula = "1/(max(1.e-10, @1*@0*@0*@0 + @2*@0*@0 + @3*@0 + @4))";
+  else if(order == 4) formula = "1/(max(1.e-10, @1*@0*@0*@0*@0 + @2*@0*@0*@0 + @3*@0*@0 + @4*@0 + @5))";
   else return nullptr;
   for(int i = 0; i < order+1; ++i) { //N(params) = order + 1
     TString base = Form("%s_inv_order_%i_%i_", name.Data(), order, i);
@@ -144,7 +162,7 @@ RooGenericPdf* create_inv_polynomial(RooRealVar& obs, int order, TString name) {
 
 //Create a Gaussian + polynomial(order = order) PDF
 RooGenericPdf* create_gaus_poly_pdf(RooRealVar& obs, int order, TString name) {
-  if(order < 0) {
+  if(order < -1) {
     cout << __func__ << ": Can't create order " << order << " PDF!\n";
     return nullptr;
   }
@@ -154,27 +172,27 @@ RooGenericPdf* create_gaus_poly_pdf(RooRealVar& obs, int order, TString name) {
   TString formula = "";
   //define the formula for fixed orders
   if     (order == -1) formula = "TMath::Gaus(@0, @1, @2)";
-  else if(order ==  0) formula = "TMath::Gaus(@0, @1, @2) + @3";
-  else if(order ==  1) formula = "TMath::Gaus(@0, @1, @2) + @3 + @4*@0/90";
-  else if(order ==  2) formula = "TMath::Gaus(@0, @1, @2) + @3 + @4*@0/90 + @5*@0*@0/90/90";
-  else if(order ==  3) formula = "TMath::Gaus(@0, @1, @2) + @3 + @4*@0/90 + @5*@0*@0/90/90 + @6*@0*@0*@0/90/90/90";
+  else if(order ==  0) formula = "max(0., TMath::Gaus(@0, @1, @2) + @3)";
+  else if(order ==  1) formula = "max(0., TMath::Gaus(@0, @1, @2) + @3 + @4*@0/90)";
+  else if(order ==  2) formula = "max(0., TMath::Gaus(@0, @1, @2) + @3 + @4*@0/90 + @5*@0*@0/90/90)";
+  else if(order ==  3) formula = "max(0., TMath::Gaus(@0, @1, @2) + @3 + @4*@0/90 + @5*@0*@0/90/90 + @6*@0*@0*@0/90/90/90)";
   else return nullptr;
   //add the Gaussian parameters
   vars.push_back(new RooRealVar(Form("%s_gaus_poly_order_%i_g_0", name.Data(), order),
                                 Form("%s_gaus_poly_order_%i_g_0", name.Data(), order),
-                                60., 50., 70.)); //mean
+                                53., 30., 90.)); //mean
   vars.push_back(new RooRealVar(Form("%s_gaus_poly_order_%i_g_1", name.Data(), order),
                                 Form("%s_gaus_poly_order_%i_g_1", name.Data(), order),
-                                11., 5., 20.)); //sigma
+                                12., 5., 20.)); //sigma
 
   //add the polynomial parameters
   for(int i = 0; i < order+1; ++i) { //N(params) = order + 1 = a +bx + ...
     TString base = Form("%s_gaus_poly_order_%i_p_%i_", name.Data(), order, i);
     vars.push_back(new RooRealVar(base + "p",
                                   base + "p",
-                                  (i == 0) ? 0.5 :  0. ,
-                                  (i == 0) ? -3. : -1,
-                                  (i == 0) ?  3. :  1));
+                                  (i == 0) ? -0.001 :  0. ,
+                                  (i == 0) ? -1. : -0.1,
+                                  (i == 0) ?  1. :  0.1));
   }
   for(auto var : vars) var_list.add(*var);
   RooGenericPdf* pdf = new RooGenericPdf(Form("%s_gaus_poly_pdf_order_%i", name.Data(), order), formula.Data(), var_list);
@@ -200,10 +218,10 @@ RooGenericPdf* create_gaus_expo_pdf(RooRealVar& obs, int order, TString name) {
   //add the Gaussian parameters
   vars.push_back(new RooRealVar(Form("%s_gaus_expo_order_%i_g_0", name.Data(), order),
                                 Form("%s_gaus_expo_order_%i_g_0", name.Data(), order),
-                                60., 50., 70.)); //mean
+                                65., 30., 90.)); //mean
   vars.push_back(new RooRealVar(Form("%s_gaus_expo_order_%i_g_1", name.Data(), order),
                                 Form("%s_gaus_expo_order_%i_g_1", name.Data(), order),
-                                11., 5., 20.)); //sigma
+                                10., 5., 20.)); //sigma
 
   //add the exponential parameters
   for(int i = 0; i < order; ++i) {
@@ -239,10 +257,10 @@ RooGenericPdf* create_gaus_power_pdf(RooRealVar& obs, int order, TString name) {
   //add the Gaussian parameters
   vars.push_back(new RooRealVar(Form("%s_gaus_power_order_%i_g_0", name.Data(), order),
                                 Form("%s_gaus_power_order_%i_g_0", name.Data(), order),
-                                60., 50., 70.)); //mean
+                                65., 50., 90.)); //mean
   vars.push_back(new RooRealVar(Form("%s_gaus_power_order_%i_g_1", name.Data(), order),
                                 Form("%s_gaus_power_order_%i_g_1", name.Data(), order),
-                                11., 5., 20.)); //sigma
+                                10., 5., 20.)); //sigma
 
   //add the power law parameters
   for(int i = 0; i < order; ++i) {
@@ -252,7 +270,7 @@ RooGenericPdf* create_gaus_power_pdf(RooRealVar& obs, int order, TString name) {
                                   1., 0., 3.));
     vars.push_back(new RooRealVar(base + "p",
                                   base + "p",
-                                  -1., -10., 3.));
+                                  -1., -50., 3.));
   }
   for(auto var : vars) var_list.add(*var);
   RooGenericPdf* pdf = new RooGenericPdf(Form("%s_gaus_power_pdf_order_%i", name.Data(), order), formula.Data(), var_list);

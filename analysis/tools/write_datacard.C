@@ -5,11 +5,13 @@ struct card_info_t {
   TString name_ = "";
   double  rate_ = 0.;
   int     selection_ = 0;
-  card_info_t(TString name, double rate, int selection) : name_(name), rate_(rate), selection_(selection) {}
+  bool    floating_ = false; // normalization floats freely via a <pdf>_norm variable (e.g. the envelope)
+  card_info_t(TString name, double rate, int selection, bool floating = false) :
+    name_(name), rate_(rate), selection_(selection), floating_(floating) {}
 };
 
 int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString file_in, map<TString, map<TString, bool>> sys_map,
-                   TString outname = "") {
+                   TString outname = "", std::vector<TString> extra_lines = {}) {
 
   if(infos.empty()) {
     cout << __func__ << ": Not process information was given\n";
@@ -79,6 +81,11 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
   if(livetime) outfile << Form("# Livetime: %.3e\n", livetime->getVal());
   if(nmuons) outfile << Form("# N(muons): %.3e\n", nmuons->getVal());
   if(sig_eff) outfile << Form("# Signal efficiency: %.3e\n", sig_eff->getVal());
+  for(auto& info : infos) {
+    // A floating process carries its yield in the workspace, so the card rate below is 1
+    if(info.floating_) outfile << Form("# %s normalization floats freely (starting yield: %.4f)\n",
+                                       info.name_.Data(), info.rate_);
+  }
   outfile << filler.Data() << std::endl;
   outfile << "\nimax 1 #number of bins\njmax * #number of processes\nkmax * #number of systematics\n\n";
   outfile << filler.Data() << std::endl;
@@ -123,7 +130,9 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
     bins += Form(" %-10s", obs_name);
     proc_n += Form(" %-10s", info.name_.Data());
     proc_i += Form(" %-10i", category);
-    rates  += Form(" %-10.4f", info.rate_);
+    // Combine multiplies a parametric shape by its <pdf>_norm variable, so a freely floating
+    // process takes a unit rate here and carries its yield in the workspace
+    rates  += Form(" %-10.4f", (info.floating_) ? 1. : info.rate_);
 
     if(index == 0) {
       systematics.push_back(Form("%-10s %-4s", "lumi", "lnN"));
@@ -135,20 +144,22 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
       systematics.push_back(Form("%-10s %-4s", "intN", "lnN"));
       // systematics.push_back(Form("%-10s %-4s", "rmcN", "lnN"));
     }
-    if(!is_cosmic) systematics[0] += Form(" %-10.3f", 1.1);
-    else           systematics[0] += Form(" %-10s", "-");
-    if(is_cosmic ) systematics[1] += Form(" %-10.3f", 1.2);
-    else           systematics[1] += Form(" %-10s", "-");
-    if(is_dio    ) systematics[2] += Form(" %-10.3f", 1.025);
-    else           systematics[2] += Form(" %-10s", "-");
-    if(is_rpc    ) systematics[3] += Form(" %-10.3f", 1.27);
-    else           systematics[3] += Form(" %-10s", "-");
-    if(is_pbar   ) systematics[4] += Form(" %-10.3f", 2.0);
-    else           systematics[4] += Form(" %-10s", "-");
-    if(is_rmc    ) systematics[5] += Form(" %-10.3f", 1.079);
-    else           systematics[5] += Form(" %-10s", "-");
-    if(is_int    ) systematics[6] += Form(" %-10.3f", 1.045);
-    else           systematics[6] += Form(" %-10s", "-");
+    // A data-driven, freely floating process takes no rate uncertainties
+    const bool rate_sys = !info.floating_;
+    if(rate_sys && !is_cosmic) systematics[0] += Form(" %-10.3f", 1.1);
+    else                       systematics[0] += Form(" %-10s", "-");
+    if(rate_sys && is_cosmic ) systematics[1] += Form(" %-10.3f", 1.2);
+    else                       systematics[1] += Form(" %-10s", "-");
+    if(rate_sys && is_dio    ) systematics[2] += Form(" %-10.3f", 1.025);
+    else                       systematics[2] += Form(" %-10s", "-");
+    if(rate_sys && is_rpc    ) systematics[3] += Form(" %-10.3f", 1.27);
+    else                       systematics[3] += Form(" %-10s", "-");
+    if(rate_sys && is_pbar   ) systematics[4] += Form(" %-10.3f", 2.0);
+    else                       systematics[4] += Form(" %-10s", "-");
+    if(rate_sys && is_rmc    ) systematics[5] += Form(" %-10.3f", 1.079);
+    else                       systematics[5] += Form(" %-10s", "-");
+    if(rate_sys && is_int    ) systematics[6] += Form(" %-10.3f", 1.045);
+    else                       systematics[6] += Form(" %-10s", "-");
     // // Systematics
     // outfile << "lumi   lnN     1.1        1.1         -         1.1        1.1        1.1\n";
     // outfile << "sigN   lnN     1.04        -          -          -          -          -\n";
@@ -184,6 +195,13 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
     outfile << line.Data() << std::endl;
   }
   if(sys_map.size() > 0) outfile << filler.Data() << std::endl;
+
+  // Additional card lines, e.g. the discrete index Combine profiles over for an envelope
+  if(!extra_lines.empty()) {
+    outfile << std::endl;
+    for(auto& line : extra_lines) outfile << line.Data() << std::endl;
+    outfile << filler.Data() << std::endl;
+  }
 
   // outfile << "\n* autoMCStats 0\n"; //MC statistics uncertainty
 
