@@ -11,6 +11,7 @@ const char* hist_func_    = "cnv_ana"; // for histogram file naming
 TString     rmc_spectrum_ = "s0v0"; // RMC spectrum to use
 bool        combine_rpc_  = true  ; // Combine RPC samples into one label
 bool        combine_rmc_  = false ; // Combine RMC samples into one label
+bool        do_knockouts_ = false ; // Separate distict RMC knockout channels
 
 // Background model options
 bool        physical_dio_     = false ; // Use flat electron or physical sample
@@ -177,33 +178,33 @@ void set_style(const TString name, TString& title, int& color) {
     title = "#mu^{-}#rightarrowe^{+}";
   } else if(name == "rmc") { // signal version
     title = "RMC";
-    color = kBlue;
+    color = kRed-7;
   } else if(name == "dio") {
     title = "DIO";
-    color = kRed-7;
+    color = kMagenta-10;
   } else if(name == "ipa_dio") {
     title = "IPA DIO";
-    color = kRed-3;
+    color = kMagenta-8;
   } else if(name.BeginsWith("cosmic")) {
     title = "Cosmic ray";
-    color = kOrange;
+    color = kAzure-4;
   } else if(name == "pbar") {
     title = "Antiproton";
-    color = kGreen-6;
+    color = kMagenta-3;
   } else if(name == "rpc_ext") {
     title = (combine_rpc_) ? "RPC" : "RPC (external)";
-    color = (combine_rpc_) ? kMagenta-10 : kMagenta-10;
+    color = (combine_rpc_) ? kGreen-6 : kGreen-6;
   } else if(name == "rpc_int") {
     title = (combine_rpc_) ? "RPC" : "RPC (internal)";
-    color = (combine_rpc_) ? kMagenta-10 : kMagenta+1;
+    color = (combine_rpc_) ? kGreen-6 : kGreen-4;
   } else if(name.BeginsWith("rmc_ext")) {
     const TString knockout = rmc_knockout(name);
-    title = (combine_rmc_) ? "RMC" : ((knockout == "") ? "RMC (external)" : Form("RMC (%s-ext)", knockout.Data()));
-    color = (knockout == "1n") ? kAtlantic+3 : kAtlantic+2;
+    title = (combine_rmc_) ? "RMC" : ((!do_knockouts_ || knockout == "") ? "RMC (external)" : Form("RMC (%s-ext)", knockout.Data()));
+    color = (!do_knockouts_ && knockout == "1n") ? kRed-5 : kRed-7;
   } else if(name.BeginsWith("rmc_int")) {
     const TString knockout = rmc_knockout(name);
-    title = (combine_rmc_) ? "RMC" : ((knockout == "") ? "RMC (internal)" : Form("RMC (%s-int)", knockout.Data()));
-    color = (knockout == "1n") ? kAtlantic+1 : kAtlantic;
+    title = (combine_rmc_) ? "RMC" : ((!do_knockouts_ || knockout == "") ? "RMC (internal)" : Form("RMC (%s-int)", knockout.Data()));
+    color = (!do_knockouts_ && knockout == "1n") ? kRed-8 : kRed-9;
   } else if(name.BeginsWith("mnbs")) {
     title = "Pileup";
     color = kRed;
