@@ -382,7 +382,8 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
 
   if(process == "mumep") {
     if(knockout == "1n") {
-      pdf = create_exponential(obs, 1, name);
+      pdf = create_gaus_poly_pdf(obs, -1, name);
+      // pdf = create_exponential(obs, 1, name);
       pdf->SetName(Form("%s_pdf", name));
     } else {
       pdf = create_gaus_poly_pdf(obs, 1, name);
@@ -428,8 +429,14 @@ pdf_info get_rmc_int_model(RooRealVar& obs, TString process, int selection, cons
   RooAbsPdf* pdf;
 
   if(process == "mumep") {
-    pdf = create_gaus_poly_pdf(obs, 1, name);
-    pdf->SetName(Form("%s_pdf", name));
+    if(knockout == "1n") {
+      pdf = create_gaus_poly_pdf(obs, -1, name);
+      // pdf = create_exponential(obs, 1, name);
+      pdf->SetName(Form("%s_pdf", name));
+    } else {
+      pdf = create_gaus_poly_pdf(obs, 1, name);
+      pdf->SetName(Form("%s_pdf", name));
+    }
   } else {
 
     RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);

@@ -196,15 +196,15 @@ void set_style(const TString name, TString& title, int& color) {
     color = (combine_rpc_) ? kGreen-6 : kGreen-6;
   } else if(name == "rpc_int") {
     title = (combine_rpc_) ? "RPC" : "RPC (internal)";
-    color = (combine_rpc_) ? kGreen-6 : kGreen-4;
+    color = (combine_rpc_) ? kGreen-6 : kGreen-9;
   } else if(name.BeginsWith("rmc_ext")) {
     const TString knockout = rmc_knockout(name);
     title = (combine_rmc_) ? "RMC" : ((!do_knockouts_ || knockout == "") ? "RMC (external)" : Form("RMC (%s-ext)", knockout.Data()));
-    color = (!do_knockouts_ && knockout == "1n") ? kRed-5 : kRed-7;
+    color = (do_knockouts_ && knockout == "1n") ? kRed-5 : kRed-7;
   } else if(name.BeginsWith("rmc_int")) {
     const TString knockout = rmc_knockout(name);
     title = (combine_rmc_) ? "RMC" : ((!do_knockouts_ || knockout == "") ? "RMC (internal)" : Form("RMC (%s-int)", knockout.Data()));
-    color = (!do_knockouts_ && knockout == "1n") ? kRed-8 : kRed-9;
+    color = (do_knockouts_ && knockout == "1n") ? kRed-8 : kRed-9;
   } else if(name.BeginsWith("mnbs")) {
     title = "Pileup";
     color = kRed;

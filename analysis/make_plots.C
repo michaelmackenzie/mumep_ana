@@ -148,6 +148,7 @@ int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dat
       c = plotter_->print_stack(plot_t("fitCons"        , "trk", set, 5, 0.  ,  1.  , 1., -1., logy, false, "p(#chi^2)", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("fitCons_log"    , "trk", set, 5, -5. ,  1.  , 1., -1., logy, false, "log(p(#chi^2))", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("clusterE"       , "trk", set, 4, 0.  , 110. , 1., -1., logy, false, "Cluster energy", "MeV/c")); if(!c) ++status; else Empty_Canvas(c);
+      c = plotter_->print_stack(plot_t("ep"             , "trk", set, 2, 0.  ,  1.2 , 1., -1., logy, false, "E/p", "")); if(!c) ++status; else Empty_Canvas(c);
       // c = plotter_->print_stack(plot_t("clusterDisk"    , "trk", set, 0, 1.  ,  -1. , 1., -1., logy, false, "Cluster disk", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("dt"             , "trk", set, 2, -10.,  5.  , 1., -1., logy, false, "#Deltat", "ns")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("nActive"        , "trk", set, 1,   1.,  -1. , 1., -1., logy, false, "N(active hits)", "")); if(!c) ++status; else Empty_Canvas(c);

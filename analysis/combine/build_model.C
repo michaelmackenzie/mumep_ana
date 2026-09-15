@@ -231,7 +231,7 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
   h_sig->Scale(signal_model.rate_);
   h_sig->SetLineColor(signal_model.color_);
   h_sig->SetLineWidth(2);
-  h_sig->SetFillStyle(3004);
+  h_sig->SetFillStyle(0);
   h_sig->SetFillColor(signal_model.color_);
   leg->AddEntry(h_sig, signal_model.title_, "L");
 
@@ -251,12 +251,18 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
   h_sig->GetXaxis()->SetTitleFont(132);
   h_sig->GetYaxis()->SetLabelFont(132);
   h_sig->GetYaxis()->SetTitleFont(132);
+  h_sig->GetXaxis()->SetLabelSize(0.05);
+  h_sig->GetXaxis()->SetTitleSize(0.05);
+  h_sig->GetYaxis()->SetLabelSize(0.05);
+  h_sig->GetYaxis()->SetTitleSize(0.05);
   h_sig->Draw("hist");
   stack->Draw("hist noclear same");
   h_sig->Draw("hist same");
-  h_sig->SetTitle(Form(";Momentum (MeV/c);Events / (%.2g MeV/c)", h_sig->GetBinWidth(1)));
+  h_sig->SetTitle(Form(";Momentum (MeV/c);Events / %.2g MeV/c", h_sig->GetBinWidth(1)));
+  Mu2e_lumi(false, npot_, livetime_, nmuons_, 0.75);
 
   leg->Draw();
+  gPad->RedrawAxis();
 
   c->SaveAs(Form("%s/input_stack_%i.png", figdir.Data(), selection));
   const double ymin = 1.e-4;
@@ -275,6 +281,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag);
   process.ToLower();
+  do_knockouts_ = true;
 
   // Create the observable
   const bool is_mumem = process == "mumem";
@@ -317,7 +324,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     if(unbinned_) {
       auto generated_data = static_cast<RooDataSet*>(nullptr);
       for(auto& bkg : background_model) {
-        auto gen_data = bkg.pdf_->generate(obs, bkg.rate_);
+        auto gen_data = bkg.pdf_->generate(obs, int(bkg.rate_ + 0.5));
         if(!gen_data) {
           cout << __func__ << ": Gen data for process " << bkg.name_.Data() << " is null!\n";
         } else if(!generated_data) {

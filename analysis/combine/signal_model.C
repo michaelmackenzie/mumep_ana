@@ -46,6 +46,10 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
 
     const int fit_version = 2; // 0: CB * Landau; 1: Landau CB; 2: CB
     const float signal_peak = (is_mumem) ? 104.0f : 92.3f;
+    RooRealVar*    sig_mean_nom = new RooRealVar   (Form("%s_sig_mean_nom", name), "mean", signal_peak, signal_peak - 5., signal_peak + 5.);
+    RooRealVar*    es_nuis      = new RooRealVar   (Form("%s_%i_es"  , process.Data(), selection), "Energy scale nuisance", 0., -7., 7.); es_nuis->setConstant(true);
+    RooRealVar*    es_size      = new RooRealVar   (Form("%s_es_size", name), "Energy scale size", 0.1); es_size->setConstant(true);
+    RooFormulaVar* sig_mean     = new RooFormulaVar(Form("%s_sig_mean"  , name), "@0+@1*@2", RooArgList(*sig_mean_nom, *es_size, *es_nuis));
 
     if(fit_version == 0) { // convolve double-sided crysal ball with energy losses
 
@@ -106,7 +110,7 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
     } else if(fit_version == 1) { // Landau core + power-law tails
       // Make a RooLandauCB PDF
 
-      RooRealVar* sig_mean     = new RooRealVar(Form("%s_sig_mean"  , name), "mean", signal_peak-1., signal_peak - 5., signal_peak + 5.);
+      // RooRealVar* sig_mean     = new RooRealVar(Form("%s_sig_mean"  , name), "mean", signal_peak-1., signal_peak - 5., signal_peak + 5.);
       RooRealVar* sig_a        = new RooRealVar(Form("%s_sig_a"     , name), "a", 0.3, 0.1,  1.);
       RooRealVar* sig_b        = new RooRealVar(Form("%s_sig_b"     , name), "b", 4.7, 0.1, 10.);
       RooRealVar* sig_alpha1   = new RooRealVar(Form("%s_sig_alpha1", name), "alpha1", 1.5, 0.1, 2.);
@@ -115,17 +119,16 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
       RooRealVar* sig_n2       = new RooRealVar(Form("%s_sig_n2"    , name), "n2", 5.0, 0.1, 10.);
       pdf                      = new RooLandauCB(Form("%s_pdf"      , name), "signal PDF", obs, *sig_mean, *sig_a, *sig_b, *sig_alpha1, *sig_n1, *sig_alpha2, *sig_n2);
 
-      sig_mean   ->setConstant(freeze);
-      sig_a      ->setConstant(freeze);
-      sig_b      ->setConstant(freeze);
-      sig_mean   ->setConstant(freeze);
-      sig_alpha1 ->setConstant(freeze);
-      sig_alpha2 ->setConstant(freeze);
-      sig_n1     ->setConstant(freeze);
-      sig_n2     ->setConstant(freeze);
+      sig_mean_nom ->setConstant(freeze);
+      sig_a        ->setConstant(freeze);
+      sig_b        ->setConstant(freeze);
+      sig_alpha1   ->setConstant(freeze);
+      sig_alpha2   ->setConstant(freeze);
+      sig_n1       ->setConstant(freeze);
+      sig_n2       ->setConstant(freeze);
     } else if(fit_version == 2) { // Double-sided Crystal Ball
 
-      RooRealVar* sig_mean     = new RooRealVar(Form("%s_mean"  , name), "mean", signal_peak, signal_peak - 5., signal_peak + 5.);
+      // RooRealVar* sig_mean     = new RooRealVar(Form("%s_mean"  , name), "mean", signal_peak, signal_peak - 5., signal_peak + 5.);
       RooRealVar* sig_sigma    = new RooRealVar(Form("%s_sigma" , name), "sigma", 1., 0., 5.);
       RooRealVar* sig_alpha1   = new RooRealVar(Form("%s_alpha1", name), "alpha1", 1., 0.1, 10.);
       RooRealVar* sig_alpha2   = new RooRealVar(Form("%s_alpha2", name), "alpha2", 1., 0.1, 10.);
@@ -133,12 +136,12 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
       RooRealVar* sig_n2       = new RooRealVar(Form("%s_n2"    , name), "enne2", 5., 0.1, 30.);
       pdf       = new RooCrystalBall(Form("%s_pdf"  , name), "Signal PDF", obs, *sig_mean, *sig_sigma, *sig_alpha1, *sig_n1, *sig_alpha2, *sig_n2);
 
-      sig_mean   ->setConstant(freeze);
-      sig_sigma  ->setConstant(freeze);
-      sig_alpha1 ->setConstant(freeze);
-      sig_alpha2 ->setConstant(freeze);
-      sig_n1     ->setConstant(freeze);
-      sig_n2     ->setConstant(freeze);
+      sig_mean_nom ->setConstant(freeze);
+      sig_sigma    ->setConstant(freeze);
+      sig_alpha1   ->setConstant(freeze);
+      sig_alpha2   ->setConstant(freeze);
+      sig_n1       ->setConstant(freeze);
+      sig_n2       ->setConstant(freeze);
     }
   } else { //Use a histogram-based PDF
     auto signal_hist = new RooDataHist(Form("%s_data", name), "Signal Data", obs, h);
