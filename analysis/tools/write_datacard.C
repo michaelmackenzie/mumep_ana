@@ -196,6 +196,11 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
   }
   if(sys_map.size() > 0) outfile << filler.Data() << std::endl;
 
+  // constrained params
+  outfile << Form("%s_%i_es_nuis", signal_name.Data(), selection)
+          << " param 0.0  1.0\n";
+  outfile << filler.Data() << std::endl;
+
   // Additional card lines, e.g. the discrete index Combine profiles over for an envelope
   if(!extra_lines.empty()) {
     outfile << std::endl;

@@ -2,7 +2,7 @@
 #define __CONVANA_ANALYSIS_DEFAULTS__
 
 const char*  hist_path_   = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms/";
-bool         hist_pdfs_   = true ; // Use functions or histograms in the model
+bool         hist_pdfs_   = false; // Use functions or histograms in the model
 bool         include_sys_ = false; // Evaluate systematics
 bool         use_evtana_  = true ; // Use Mu2eEvtAna inputs (EventNtuple)
 bool         run1a_range_ = false; // Use Run 1A paper range (only in EvtAna mode)
