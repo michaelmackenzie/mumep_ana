@@ -399,7 +399,10 @@ TCanvas* plot_fit_frame(RooPlot* frame, RooRealVar& obs, TString xtitle, TString
       for(int ip = 0; ip < n; ++ip) {
         double x(0.), y(0.);
         hdata->GetPoint(ip, x, y);
-        const double model = cpdf->Eval(x);
+        const double xlo = x - hdata->GetErrorXlow(ip);
+        const double xhi = x + hdata->GetErrorXhigh(ip);
+        // compare to the curve's integral over the bin, not its value at the bin center
+        const double model = cpdf->average(xlo, xhi);
         const double denom = std::abs(model);
         double frac(0.), err_lo(0.), err_hi(0.);
         if(denom > 0.) {

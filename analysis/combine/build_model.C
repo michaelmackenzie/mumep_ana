@@ -235,6 +235,7 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
   h_sig->SetFillColor(signal_model.color_);
   leg->AddEntry(h_sig, signal_model.title_, "L");
 
+  vector<TH1*> bkg_hs;
   for(auto& bkg : background_model) {
     TH1* h = bkg.pdf_->createHistogram(bkg.name_, obs);
     h->Scale(bkg.rate_);
@@ -243,7 +244,15 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
     h->SetFillColor(bkg.color_);
     h->SetFillStyle(kSolid);
     stack->Add(h);
-    leg->AddEntry(h, bkg.title_, "F");
+    h->SetName(Form("tmp_%s", bkg.name_.Data()));
+    bkg_hs.push_back(h);
+  }
+
+  // Add backgrounds to the legend in reverse order
+  const size_t nbkg = bkg_hs.size();
+  for(size_t i = 0; i < nbkg; ++i) {
+    const int index = nbkg - i - 1;
+    leg->AddEntry(bkg_hs[index], background_model[index].title_, "F");
   }
 
 
@@ -264,10 +273,13 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
   leg->Draw();
   gPad->RedrawAxis();
 
-  c->SaveAs(Form("%s/input_stack_%i.png", figdir.Data(), selection));
-  const double ymin = 1.e-4;
   const double max_val = max(((TH1*) stack->GetStack()->Last())->GetMaximum(), h_sig->GetMaximum());
-  const double ymax = ymin*std::pow(max_val/ymin, 1./0.73);
+  double ymin = 0.;
+  double ymax = 1.35*max_val;
+  h_sig->GetYaxis()->SetRangeUser(ymin, ymax);
+  c->SaveAs(Form("%s/input_stack_%i.png", figdir.Data(), selection));
+  ymin = 1.e-4;
+  ymax = ymin*std::pow(max_val/ymin, 1./0.73);
   h_sig->GetYaxis()->SetRangeUser(ymin, ymax);
   c->SetLogy();
   c->SaveAs(Form("%s/input_stack_%i_log.png", figdir.Data(), selection));
