@@ -1,8 +1,8 @@
 // Optimize the event selection
 
-#include "mumep_ana/analysis/defaults.C"
-#include "mumep_ana/analysis/physics.C"
-#include "mumep_ana/analysis/datasets.C"
+#include "../defaults.C"
+#include "../physics.C"
+#include "../datasets.C"
 
 int debug_level_ = 0;
 
@@ -123,7 +123,7 @@ TString build_cut_string(std::vector<Var_t>& vars) {
 
 double evaluate_norm(TString name, TFile* f, const DatasetInfo_t& info) {
   double scale = (name.Contains("cosmic")) ? livetime_ : npot_;
-  TTree* t_norm = (TTree*) f->Get("Ana/ConvAna_ConvAna/data/Norm");
+  TTree* t_norm = (TTree*) f->Get(Form("%sdata/Norm", dir_path_.Data()));
   if(t_norm) {
     Long64_t nseen(0), ntotal(0);
     t_norm->SetBranchAddress("nseen", &nseen);
@@ -144,7 +144,7 @@ double evaluate_norm(TString name, TFile* f, const DatasetInfo_t& info) {
 double evaluate_yield(Sample_t& sample, TString cut_string) {
   TCut cut("weight * (" + cut_string + ")");
   TH1F* hist = new TH1F("hist", "hist", 1, -1e20, 1e20);
-  sample.tree->Draw("trkp>>hist", cut, "goff");
+  sample.tree->Draw("trk_p>>hist", cut, "goff");
   double n = sample.norm*hist->Integral();
   delete hist;
   return n;
@@ -289,35 +289,39 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
   const double pmin = (mumem) ? 101. : 90.;
   const double pmax = (mumem) ? 107. : 93.;
   init_physics("run1a"); // default to Run 1A
+  use_evtana_ = true;
+  set_evtana_defaults();
   init_dataset_info();
-  std::vector<TString> names = {
-    (mumem) ? "mumem" : "mumep", "cosmic", "rpc_ext", "rpc_int",
-    "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n"
-  };
+  std::vector<TString> names = {(mumem) ? "mumem" : "mumep", "cosmic", "rmc_ext_0n", "rmc_int_0n", "rpc_ext", "rpc_int"};
   std::vector<Sample_t> samples;
   for(auto name : names) {
     const auto& info = get_dataset_info(name);
     if(info.name_ == "") {
-      cout << "Dataset " << name << " not found!\n";
+      cout << "Dataset \"" << name << "\" not found!\n";
       return 1;
     }
-    TFile* f = TFile::Open(Form("%sConvAna.%s.%s.m1.root", hist_path_, hist_func_,
-                                info.name_.Data()), "READ");
+    TFile* f = TFile::Open(Form("%sConvAna.%s.%s.m%i.%s", hist_path_, hist_func_,
+                                info.name_.Data(), hist_mode_, file_type_.Data()), "READ");
     if(!f) {
       cout << "Dataset " << name << " hist file not found!\n";
       return 1;
     }
-    TTree* t = (TTree*) f->Get(Form("Ana/trs_%i/Tree", base_set));
+    const char* tpath = Form("%sHist/trs_%i/tree", dir_path_.Data(), base_set);
+    TTree* t = (TTree*) f->Get(tpath);
     if(!t) {
-      cout << "Dataset " << name << " tree not found!\n";
+      cout << "Dataset " << name << " tree not found! Path = " << tpath << endl;
       return 1;
     }
     gROOT->cd(); // put the copy in gROOT directory
     // apply momentum window, track charge, and event weight selection
-    const int max_events = (name == "mumem" || "mumep") ? 40000 : 1e7; // reduce signal, comes out in the relative S/sqrt(B)
+    const int max_events = (name == "mumem" || "mumep") ? 100000 : 1e7; // reduce signal, comes out in the relative S/sqrt(B)
     const double events_scale = (t->GetEntries() > max_events) ? t->GetEntries() * 1./max_events : 1.;
-    t = t->CopyTree(Form("trkp < %.2f && trkp > %.2f && (%s * trkq) > 0 && weight > 0.",
+    t = t->CopyTree(Form("trk_p < %.2f && trk_p > %.2f && (%s * trk_charge) > 0 && weight > 0.",
                          pmax, pmin, (mumem) ? "-1" : "1"), "", max_events);
+    if(!t) {
+      cout << "Dataset " << name << " has no events that pass!\n";
+      continue;
+    }
     const double scale = events_scale*evaluate_norm(name, f, info);
     samples.push_back(Sample_t(f, t, scale*info.theory_, name));
     samples.back().signal = name == "mumem" || name == "mumep";
@@ -326,16 +330,16 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
 
   // Define the list of variables to test
   std::vector<Var_t> vars;
-  vars.push_back(Var_t("trkcostheta",  0.4,   0.9));
-  vars.push_back(Var_t("trkt0"      , 501., 1650.));
-  vars.push_back(Var_t("trkrmax"    , 400.,  700.));
-  vars.push_back(Var_t("trkep"      ,   0.,   1.2));
-  vars.push_back(Var_t("trkdt"      ,  -4.,    4.));
-  vars.push_back(Var_t("trkfitcon"  ,   0.,    1., kLeft)); // only cut low track quality
-  vars.push_back(Var_t("trkqual"    ,  -1.,    1., kLeft)); // only cut on low scores for MVA ID scores
-  vars.push_back(Var_t("trkpid"     ,  -1.,    1., kLeft));
-  vars.push_back(Var_t("trkonlypid" ,  -1.,    1., kLeft));
-  // vars.push_back(Var_t("trkcsmid"   ,  -1.,    1., kLeft));
+  vars.push_back(Var_t("trk_cos"       ,  0.4,   0.9));
+  vars.push_back(Var_t("trk_t0"        , 500., 1650.));
+  vars.push_back(Var_t("trk_rmax"      , 400.,  700.));
+  vars.push_back(Var_t("trk_ep"        ,   0.,   1.2));
+  vars.push_back(Var_t("trk_dt"        ,  -4.,    4.));
+  vars.push_back(Var_t("trk_fitcon"    ,   0.,    1., kLeft)); // only cut low track quality
+  vars.push_back(Var_t("trk_qual"      ,  -1.,    1., kLeft)); // only cut on low scores for MVA ID scores
+  vars.push_back(Var_t("trk_pid"       ,  -1.,    1., kLeft));
+  vars.push_back(Var_t("trk_trkonlypid",  -1.,    1., kLeft));
+  // vars.push_back(Var_t("trk_csmid"     ,  -1.,    1., kLeft));
 
   // Validate the variables
   for(auto& var : vars) {
@@ -366,9 +370,10 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
   // Continue running until low efficiency
   double eff = 1.;
   double max_sig = 0.;
-  const double eff_step = (use_combine_) ? 0.03 : 0.01; // aim for 1% efficiency steps
+  const double eff_step = (use_combine_) ? 0.03 : (mumem) ? 0.01 : 0.005; // aim for 1% efficiency steps
   const bool use_grad = true; // use gradient or just significance
-  while(eff > 0.3) {
+  const double end_eff = (mumem) ? 0.3 : 0.8;
+  while(eff > end_eff) {
     std::vector<TestPoint_t> candidates;
     size_t index = 0;
     double sig_best(0.), grad_best(-1.e10);
@@ -405,7 +410,7 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
   }
 
   // Do a random grid test
-  const int ntests = 1e3;
+  const int ntests = 1e4;
   auto [grid_points, grid_sigs] = perform_grid_scan(samples, vars_grid, n_bkg_0, n_sig_0, ntests,
                                                     &points
                                                     );
