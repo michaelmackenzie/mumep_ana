@@ -4,6 +4,60 @@
 #include "../defaults.C"
 #include "../datasets.C"
 
+//---------------------------------------------------------------------------------------------------------------------------
+// Optional alternate histogram files, keyed by dataset key. An entry under the key "" is used for
+// any dataset without its own entry. When no entry applies, the default file in hist_path_ is used.
+std::map<TString, TString> hist_files_;
+
+// Use an alternate histogram file for the given dataset key, or for all datasets if the key is empty.
+// An empty file name removes the corresponding override.
+void set_hist_file(TString file, TString dataset_key = "") {
+  if(file == "") hist_files_.erase(dataset_key);
+  else           hist_files_[dataset_key] = file;
+}
+
+void clear_hist_files() { hist_files_.clear(); }
+
+// Default histogram file for a dataset, i.e. the file in the configured histogram directory
+TString default_hist_file(const TString& dataset_name) {
+  return Form("%sConvAna.%s.%s.m%i.%s",
+              hist_path_, hist_func_, dataset_name.Data(), hist_mode_, file_type_.Data());
+}
+
+// Histogram file to read for a given dataset, taking any alternate file into account.
+// An alternate file may be an absolute path, a URL, a path relative to the working directory,
+// or a file name relative to the configured histogram directory.
+TString get_hist_file(const TString& dataset_key, const TString& dataset_name) {
+  TString file = "";
+  auto it = hist_files_.find(dataset_key);
+  if(it == hist_files_.end()) it = hist_files_.find("");
+  if(it != hist_files_.end()) file = it->second;
+  if(file == "") return default_hist_file(dataset_name);
+
+  if(!file.BeginsWith("/") && !file.Contains("://") && gSystem->AccessPathName(file)) {
+    const TString alt = Form("%s%s", hist_path_, file.Data());
+    if(!gSystem->AccessPathName(alt)) return alt;
+  }
+  return file;
+}
+
+//---------------------------------------------------------------------------------------------------------------------------
+// Use an alternate histogram file for as long as this object is alive, restoring the previous
+// configuration afterwards. An empty file name leaves the configuration untouched.
+struct ScopedHistFile {
+  std::map<TString, TString> saved_;
+  bool active_;
+
+  ScopedHistFile(TString file, TString dataset_key = "") : saved_(hist_files_), active_(file != "") {
+    if(active_) {
+      set_hist_file(file, dataset_key);
+      cout << "ScopedHistFile: using histogram file " << get_hist_file(dataset_key, "").Data()
+           << " for " << ((dataset_key == "") ? "all datasets" : dataset_key.Data()) << endl;
+    }
+  }
+  ~ScopedHistFile() { if(active_) hist_files_ = saved_; }
+};
+
 Long64_t read_norm_tree_entries(TFile* f, const TString& process) {
   if(!f) return 0;
   TTree* t_norm = (TTree*) f->Get(Form("%sdata/Norm", dir_path_.Data()));
@@ -53,11 +107,11 @@ TH1* load_component_hist_from_dataset(const TString& dataset_key,
     return nullptr;
   }
 
-  TFile* f = TFile::Open(Form("%sConvAna.%s.%s.m%i.%s",
-                              hist_path_, hist_func_, info.name_.Data(), hist_mode_, file_type_.Data()),
-                         "READ");
+  const TString file_name = get_hist_file(dataset_key, info.name_);
+  TFile* f = TFile::Open(file_name.Data(), "READ");
   if(!f) {
-    cout << __func__ << ": Unable to open histogram file for " << dataset_key.Data() << endl;
+    cout << __func__ << ": Unable to open histogram file " << file_name.Data()
+         << " for " << dataset_key.Data() << endl;
     return nullptr;
   }
 

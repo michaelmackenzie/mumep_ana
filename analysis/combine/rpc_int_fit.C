@@ -4,12 +4,14 @@
 
 #include "component_fit.C"
 
+// hist_file: optional alternate histogram file to fit, instead of the default one in hist_path_
 int rpc_int_fit(TString process = "mumem", int selection = 20, TString tag = "", TString pdf_type = "default",
-                std::vector<int> shape_sets = {}, std::vector<int> control_region_sets = {}) {
+                std::vector<int> shape_sets = {}, std::vector<int> control_region_sets = {},
+                TString hist_file = "") {
   return fit_component_model(process, selection, tag,
                              "rpc_int", "RPC (internal)",
                              pdf_type, -1, "none",
-                             shape_sets, control_region_sets, "primary");
+                             shape_sets, control_region_sets, "primary", hist_file);
 }
 
 #endif

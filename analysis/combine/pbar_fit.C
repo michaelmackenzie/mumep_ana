@@ -4,8 +4,10 @@
 
 #include "component_fit.C"
 
+// hist_file: optional alternate histogram file to fit, instead of the default one in hist_path_
 int pbar_fit(TString process = "mumem", int selection = 20, TString tag = "", TString pdf_type = "default",
-             std::vector<int> shape_sets = {}, std::vector<int> control_region_sets = {}) {
+             std::vector<int> shape_sets = {}, std::vector<int> control_region_sets = {},
+             TString hist_file = "") {
     // if(use_evtana_) {
     //     cout << __func__ << ": skipping pbar fit when use_evtana_ is true" << endl;
     //     return 0;
@@ -13,7 +15,7 @@ int pbar_fit(TString process = "mumem", int selection = 20, TString tag = "", TS
   return fit_component_model(process, selection, tag,
                              "pbar", "Antiproton",
                              pdf_type, -1, "none",
-                             shape_sets, control_region_sets, "primary");
+                             shape_sets, control_region_sets, "primary", hist_file);
 }
 
 #endif

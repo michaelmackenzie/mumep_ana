@@ -39,6 +39,9 @@
 #include "Offline/MCDataProducts/inc/ProcessCode.hh"
 #include "ArtAnalysis/TrkDiag/inc/TrackPID_v1.hxx"
 
+// c++ includes
+#include <cmath>
+
 // ROOT includes
 #include "TRandom3.h"
 #include "TTree.h"

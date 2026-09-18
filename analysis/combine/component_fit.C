@@ -73,7 +73,8 @@ int fit_component_model(TString process,
                         TString tail_model = "default",
                         std::vector<int> shape_sets = {},
                         std::vector<int> control_region_sets = {},
-                        TString fit_input = "primary") {
+                        TString fit_input = "primary",
+                        TString hist_file = "") {
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag);
 
@@ -82,6 +83,10 @@ int fit_component_model(TString process,
   tail_model = resolve_tail_model(component, tail_model);
 
   const TString dataset_key = component_dataset_key(component, process);
+
+  // optionally read the input histograms from an alternate file instead of the default one
+  // in the configured histogram directory
+  ScopedHistFile hist_file_override(hist_file, dataset_key);
   const bool is_mumem = process == "mumem";
   const double xmin = (is_mumem) ? xmin_em_ : xmin_ep_;
   const double xmax = (is_mumem) ? xmax_em_ : xmax_ep_;

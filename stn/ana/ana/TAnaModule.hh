@@ -6,6 +6,7 @@
 
 // standard includes
 #include <climits>
+#include <cmath>
 
 // ROOT includes
 #include "Math/PdfFuncMathCore.h"

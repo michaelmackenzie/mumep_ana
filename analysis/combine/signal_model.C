@@ -46,10 +46,10 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
 
     const int fit_version = 1; // 0: CB * Landau; 1: Landau CB; 2: CB
     const float signal_peak = (is_mumem) ? 104.0f : 92.3f;
-    RooRealVar*    sig_mean_nom = new RooRealVar   (Form("%s_sig_mean_nom", name), "mean", signal_peak-1., signal_peak - 5., signal_peak + 5.);
     RooRealVar*    es_nuis      = new RooRealVar   (Form("%s_%i_es"  , process.Data(), selection), "Energy scale nuisance", 0., -7., 7.); es_nuis->setConstant(true);
-    RooRealVar*    es_size      = new RooRealVar   (Form("%s_es_size", name), "Energy scale size", 0.1); es_size->setConstant(true);
-    RooFormulaVar* sig_mean     = new RooFormulaVar(Form("%s_sig_mean"  , name), "@0+@1*@2", RooArgList(*sig_mean_nom, *es_size, *es_nuis));
+    RooRealVar*    sig_mean_nom = new RooRealVar   (Form("%s_sig_mean_nom", name), "mean", signal_peak-1., signal_peak - 5., signal_peak + 5.);
+    RooRealVar*    es_size      = new RooRealVar   (Form("%s_es_size"     , name), "Energy scale size", 0.1); es_size->setConstant(true);
+    RooFormulaVar* sig_mean     = new RooFormulaVar(Form("%s_sig_mean"    , name), "@0+@1*@2", RooArgList(*sig_mean_nom, *es_size, *es_nuis));
 
     if(fit_version == 0) { // convolve double-sided crysal ball with energy losses
 
@@ -59,7 +59,7 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
 
       RooRealVar* sig_mean     = new RooRealVar(Form("%s_sig_mean"  , name), "mean", -1*signal_peak, -1*signal_peak - 5., -1*signal_peak + 5.);
       RooRealVar* sig_sigma    = new RooRealVar(Form("%s_sig_sigma" , name), "sigma", 0.2, 0., 5.);
-      RooAbsPdf*  sig_pdf      = new RooLandau (Form("%s_sig_pdf"  , name), "signal base PDF", *sig_flip_obs, *sig_mean, *sig_sigma);
+      RooAbsPdf*  sig_pdf      = new RooLandau (Form("%s_sig_pdf"   , name), "signal base PDF", *sig_flip_obs, *sig_mean, *sig_sigma);
 
       // Make a resolution function
       RooRealVar* res_mean     = new RooRealVar(Form("%s_res_mean"  , name), "mean", 0., -1., 1.);

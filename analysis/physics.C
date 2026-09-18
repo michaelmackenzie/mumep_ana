@@ -198,6 +198,14 @@ void init_physics(TString tag) {
     nmuons_per_pot_ = nmuons_per_pot_run1a_          ;
     signal_br_      = 1.e-13                         ;
   }
+  if(tag.Contains("mds3d") && use_evtana_) {
+    const float ad_hoc(1.f);
+    livetime_       = 4401645.8                      ; // MDS3d
+    npot_           = ad_hoc*livetime_*npot_rate_1bb_;
+    nmuons_         = npot_*nmuons_per_pot_run1a_    ;
+    nmuons_per_pot_ = nmuons_per_pot_run1a_          ;
+    signal_br_      = 1.e-13                         ;
+  }
 
   if(tag.Contains("mdc2025") || tag.Contains("run1a")) {
     const float ad_hoc(1.f);

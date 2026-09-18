@@ -126,6 +126,7 @@ void init_dataset_info() {
     datasets_["rmc_int"] = datasets_["rmc_int_0n"];
 
     datasets_["data_mds3c"] = DatasetInfo_t(1.    , 4921433, 0.,   1., 1., "mds3cb1s5r0100", "nts.mu2e.ensembleMDS3cMix1BB.MDC2025ar_best_v1_1.root"              );
+    datasets_["data_mds3d"] = DatasetInfo_t(1.    , 9837962, 0.,   1., 1., "mds3db0s5r0100", "nts.mu2e.ensembleMDS3dOnSpill.MDC2025au_best_v1_1-001.root"         );
   }
 }
 
