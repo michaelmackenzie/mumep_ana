@@ -273,7 +273,7 @@ int fit_component_model(TString process,
                                     h);
 
   if(component == "signal" && should_fit_pdf(pdf_type, use_hist_pdf)) {
-    obs.setMax((is_mumem) ? 107. : 95.);
+    obs.setMax((is_mumem) ? 107. : 97.);
     if(run_component_fit(pdf, *fit_data, pdf_type, use_hist_pdf, false)) return 20;
     obs.setMax(xmax);
   } else {
