@@ -146,7 +146,7 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
       RooRealVar* sig_b        = new RooRealVar(Form("%s_b", name), "sigmaR", 0.22, 0.05, 0.5);
       RooRealVar* sig_alpha1   = new RooRealVar(Form("%s_alpha1", name), "alphaL", 0.01, 0.0001, 0.1);
       RooRealVar* sig_alpha2   = new RooRealVar(Form("%s_alpha2", name), "alphaR", 0.005, 0.0001, 0.05);
-      sig_mean_nom->setVal(91.4);
+      sig_mean_nom->setVal(signal_peak - 0.9);
 
       // Inline mathematical definition of the Cruijff PDF
       TString formula = Form(
