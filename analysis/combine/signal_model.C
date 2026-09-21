@@ -60,7 +60,7 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
       RooRealVar* g_coreL   = new RooRealVar(Form("%s_gCoreL", name), "Resolution Core Left", 0.20, 0.05, 0.4);
       RooRealVar* g_coreR   = new RooRealVar(Form("%s_gCoreR", name), "Resolution Core Right", 0.20, 0.05, 0.4);
       RooRealVar* g_alphaL  = new RooRealVar(Form("%s_gAlphaL", name), "Left Tail Alpha", 1.5, 0.5, 3.5);
-      RooRealVar* g_nL      = new RooRealVar(Form("%s_gNL",     name), "Left Tail Power N", 2.5, 1.1, 6.0);
+      RooRealVar* g_nL      = new RooRealVar(Form("%s_gNL",     name), "Left Tail Power N", (is_mumem) ? 4. : 2.5, 1.1, 6.0);
       RooRealVar* g_alphaR  = new RooRealVar(Form("%s_gAlphaR", name), "Right Tail Alpha", 1.63, 0.5, 3.5);
       RooRealVar* g_nR      = new RooRealVar(Form("%s_gNR",     name), "Right Tail Power N", 4.0, 1.1, 6.0);
       RooCrystalBall* resolutionModel = new RooCrystalBall(Form("%s_resModel", name), "Asymmetric DSCB Resolution",
