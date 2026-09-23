@@ -107,6 +107,8 @@ ax.legend(loc="upper right")
 
 # Save or show the plot
 plt.savefig(f"sensitivity_vs_livetime_{card_base}.png", dpi=300)
+ax.set_yscale("log")
+plt.savefig(f"sensitivity_vs_livetime_{card_base}_log.png", dpi=300)
 
 # Plot improvement vs time
 plt.figure(figsize=(8, 5))

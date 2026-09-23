@@ -35,6 +35,67 @@ double getCombine(double S, double B) {
   return (ul > 0.) ? 1./ul : 0.;
 }
 
+// Evaluates the continuous Asimov CLs value for a given mu, s, and b
+double GetAsimovCLs(double mu, double s, double b) {
+    if (mu <= 0.0) return 1.0;
+
+    double mu_s_plus_b = mu * s + b;
+
+    // 1. Calculate q_mu (Profile Likelihood Ratio for the tested hypothesis)
+    // Avoid log(0) issues if background is theoretically tiny
+    double q_mu = 0.0;
+    if (b > 0) {
+        q_mu = 2.0 * (mu_s_plus_b * std::log(mu_s_plus_b / b) - mu * s);
+    }
+    if (q_mu < 0.0) q_mu = 0.0; // Protection against floating-point underflow
+    double sqrt_q_mu = std::sqrt(q_mu);
+
+    // 2. Calculate q_mu_A (Variance proxy under the background-only Asimov assumption)
+    double sqrt_q_mu_A = (mu * s) / std::sqrt(b);
+
+    // 3. Convert test statistics to standard normal Gaussian p-values
+    double one_minus_cl_sb = 1.0 - ROOT::Math::normal_cdf(sqrt_q_mu);
+    double one_minus_cl_b  = ROOT::Math::normal_cdf(sqrt_q_mu_A - sqrt_q_mu);
+
+    // 4. Return CLs ratio
+    if (one_minus_cl_b <= 0.0) return 0.0;
+    return one_minus_cl_sb / one_minus_cl_b;
+}
+
+double getAsimovExpUL(double s, double b) {
+  if(b <= 0. || s <= 0.) return 0.;
+
+  // CL target
+  const double target_cls = 0.10;
+
+  // Determine a range for the signal strength
+  double mu_min = 0.0;
+  double mu_max = 1.5*(2.30 + 1.645 * std::sqrt(b)) / s;
+  while (true) {
+    double cls = GetAsimovCLs(mu_max, s, b);
+    if (cls < target_cls) {
+      break; // mu_max is high enough
+    }
+    // mu_max too small --> increase the size
+    mu_min = mu_max;
+    mu_max *= 2.0;
+  }
+
+  // Binary search given a defined mu range
+  const double tolerance = 1e-4; // Accuracy for mu
+  while ((mu_max - mu_min) > tolerance) {
+    double mu_mid = 0.5 * (mu_min + mu_max);
+    double cls = GetAsimovCLs(mu_mid, s, b);
+
+    if (cls > target_cls) {
+      mu_min = mu_mid; // mu is too small (CLs is too high)
+    } else {
+      mu_max = mu_mid; // mu is too large (CLs is too low)
+    }
+  }
+  return 0.5 * (mu_min + mu_max);
+}
+
 double getAsimovSig(double S, double B) {
   if (S <= 0.0) return 0.0;
   if (B <= 1e-9) return std::sqrt(2.0 * S); // Smooth mathematical limit at B = 0
