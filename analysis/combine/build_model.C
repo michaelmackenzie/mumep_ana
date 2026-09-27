@@ -85,7 +85,8 @@ bool add_independent_2d_inputs(RooWorkspace& ws,
                                RooRealVar& momentum_obs,
                                RooRealVar& time_obs,
                                const TString& figdir,
-                               TFile* out_file = nullptr) {
+                               TFile* out_file = nullptr,
+                               TH2** total_expected = nullptr) { // if given, the component's expected 2D histogram is added to it
   const TH1* momentum_hist = preferred_momentum_hist(info);
   const TH1* time_hist = preferred_time_hist(info);
   if(!momentum_hist || !time_hist) {
@@ -140,6 +141,14 @@ bool add_independent_2d_inputs(RooWorkspace& ws,
   if(out_file) {
     out_file->cd();
     h2->Write();
+  }
+  if(total_expected) {
+    if(!*total_expected) {
+      *total_expected = (TH2*) h2->Clone("total_expected_2d");
+      (*total_expected)->SetDirectory(0);
+    } else {
+      (*total_expected)->Add(h2);
+    }
   }
   delete h2;
   return true;
@@ -315,6 +324,15 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   if(do_2d_fit_ && !hist_pdfs_) {
     cout << __func__ << ": 2D fits require hist_pdfs_ = true for now." << endl;
+    return 1;
+  }
+  // A 2D (p, t0) model needs 2D data_obs: with a 1D data_obs, Combine treats obs_t as a
+  // floating parameter instead of an observable, so the fit is really a 1D slice at one t0.
+  // The input histogram files only provide 1D momentum and t0 distributions for data, so a
+  // 2D fit to real data cannot be built yet; the pseudo-data is generated in 2D below.
+  if(do_2d_fit_ && data) {
+    cout << __func__ << ": 2D fits to real data need a 2D (obs, t0) data histogram, which the inputs do not provide."
+         << " Use pseudo-data (no data tag) or a 1D fit." << endl;
     return 1;
   }
 
@@ -530,7 +548,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   RooWorkspace ws("workspace", "workspace");
   ws.import(obs);
-  ws.import(*data);
+  if(!do_2d_fit_) ws.import(*data); // 2D fits: a 2D data_obs is built with the 2D inputs below
   if(do_2d_fit_) {
     ws.import(*signal_model.norm_);
     for(auto& bkg : background_model) ws.import(*bkg.norm_);
@@ -563,16 +581,39 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
                      signal_time_hist->GetXaxis()->GetBinLowEdge(1),
                      signal_time_hist->GetXaxis()->GetBinUpEdge(signal_time_hist->GetNbinsX()));
     obs_t.SetTitle("t0");
+    obs_t.setBins(signal_time_hist->GetNbinsX());
     ws.import(obs_t);
 
     if(!add_independent_2d_inputs(ws, signal_model, process, selection, signal_model.name_, obs, obs_t, figdir, fout)) {
       return 1;
     }
+    TH2* bkg_expected = nullptr; // sum of the background (p, t0) expectations
     for(auto& bkg : background_model) {
-      if(!add_independent_2d_inputs(ws, bkg, process, selection, bkg.name_, obs, obs_t, figdir, fout)) {
+      const TH1* time_hist = preferred_time_hist(bkg);
+      if(time_hist && (time_hist->GetNbinsX() != signal_time_hist->GetNbinsX()
+                       || std::fabs(time_hist->GetXaxis()->GetXmin() - signal_time_hist->GetXaxis()->GetXmin()) > 1.e-6
+                       || std::fabs(time_hist->GetXaxis()->GetXmax() - signal_time_hist->GetXaxis()->GetXmax()) > 1.e-6)) {
+        cout << __func__ << ": The t0 binning of " << bkg.name_.Data() << " differs from the signal's." << endl;
+        return 1;
+      }
+      if(!add_independent_2d_inputs(ws, bkg, process, selection, bkg.name_, obs, obs_t, figdir, fout, &bkg_expected)) {
         return 1;
       }
     }
+
+    // Background-only pseudo-data in (p, t0), Poisson-fluctuated per bin like the 1D pseudo-data,
+    // from the same independent p x t0 expectation as the 2D model
+    for(int ix = 1; ix <= bkg_expected->GetNbinsX(); ++ix) {
+      for(int iy = 1; iy <= bkg_expected->GetNbinsY(); ++iy) {
+        const double mu = std::max(0., bkg_expected->GetBinContent(ix, iy));
+        const double n  = RooRandom::randomGenerator()->Poisson(mu);
+        bkg_expected->SetBinContent(ix, iy, n);
+        bkg_expected->SetBinError(ix, iy, std::sqrt(n));
+      }
+    }
+    RooDataHist data_2d("data_obs", "Data histograms", RooArgList(obs, obs_t), bkg_expected);
+    ws.import(data_2d);
+    delete bkg_expected;
   }
 
   // Add systematic uncertainties

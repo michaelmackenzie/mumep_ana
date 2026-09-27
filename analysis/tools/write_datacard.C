@@ -196,10 +196,23 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
   }
   if(sys_map.size() > 0) outfile << filler.Data() << std::endl;
 
-  // constrained params
-  outfile << Form("%s_%i_es_nuis", signal_name.Data(), selection)
-          << " param 0.0  1.0\n";
-  outfile << filler.Data() << std::endl;
+  // constrained params: the energy-scale nuisance is the <process>_<selection>_es variable the
+  // signal/DIO function models shift with (signal_model.C, background_model.C). Combine makes it
+  // float when a param line names it; histogram models have no such variable, and a param line
+  // would then only add a disconnected nuisance, so it is written only when the model uses it.
+  const TString es_name = Form("%s_%i_es", signal_name.Data(), selection);
+  RooRealVar* es_var = ws->var(es_name.Data());
+  bool es_used = false;
+  if(es_var) {
+    for(auto& info : infos) {
+      RooAbsPdf* pdf = ws->pdf(Form("%s_%i_%s_pdf", signal_name.Data(), selection, info.name_.Data()));
+      if(pdf && pdf->dependsOn(*es_var)) { es_used = true; break; }
+    }
+  }
+  if(es_used) {
+    outfile << es_name.Data() << " param 0.0  1.0\n";
+    outfile << filler.Data() << std::endl;
+  }
 
   // Additional card lines, e.g. the discrete index Combine profiles over for an envelope
   if(!extra_lines.empty()) {
