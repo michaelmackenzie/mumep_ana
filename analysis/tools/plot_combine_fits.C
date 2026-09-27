@@ -113,16 +113,21 @@ int plot_combine_fits(const char* file_name, double r_true = 0., TString out_nam
   h->GetYaxis()->SetRangeUser(0., 1.2*h->GetMaximum());
   h->SetFillColor(kBlue);
   h->SetFillStyle(3003);
+  h->SetLineWidth(3);
 
   //Plot the pull histogram
   c->cd(2);
   hpull->Fit("gaus","L");
+  hpull->Draw("EX0");
   hpull->SetLineWidth(2);
   hpull->SetXTitle("(#mu-#mu_{true})/#sigma");
   hpull->SetYTitle("N(toys)");
   hpull->GetYaxis()->SetRangeUser(0., 1.2*hpull->GetMaximum());
-  hpull->SetFillColor(kBlue);
-  hpull->SetFillStyle(3003);
+  // hpull->SetFillColor(kBlue);
+  // hpull->SetFillStyle(3003);
+  hpull->SetMarkerStyle(20);
+  hpull->SetMarkerColor(kBlack);
+  hpull->SetLineWidth(2);
 
   if(out_name == "") {out_name = file_name; out_name.ReplaceAll(".root", ".png");}
   else if(!out_name.EndsWith(".png")) out_name += ".png";

@@ -151,6 +151,10 @@ pdf_info get_dio_model(RooRealVar& obs, const TString process, const int selecti
 
   const int fit_version = 1; // 0: Convolve with response; 1: approx model
 
+  RooRealVar*    es_nuis     = new RooRealVar   (Form("%s_%i_es"  , process.Data(), selection), "Energy scale nuisance", 0., -7., 7.); es_nuis->setConstant(true);
+  RooRealVar*    es_size     = new RooRealVar   (Form("%s_es_size"     , name), "Energy scale size", 0.1); es_size->setConstant(true);
+  RooFormulaVar* shifted_obs = new RooFormulaVar(Form("%s_shifted_obs", name), "@0+@1*@2", RooArgList(obs, *es_size, *es_nuis));
+
   RooAbsPdf* pdf = nullptr;
   if(fit_version == 0) {
     RooAbsPdf* resolution = nullptr;
@@ -163,16 +167,7 @@ pdf_info get_dio_model(RooRealVar& obs, const TString process, const int selecti
       RooRealVar* n1        = new RooRealVar(Form("%s_res_n1"    , name), "enne1", 7.3, 0.1, 30.);
       RooRealVar* n2        = new RooRealVar(Form("%s_res_n2"    , name), "enne2", 6.7, 0.1, 30.);
       RooRealVar* sigma     = new RooRealVar(Form("%s_res_sigma" , name), "sigma", 0.1, 0.001, 1.);
-      resolution = new RooCrystalBall(Form("%s_res_pdf"  , name), "DIO resolution", obs, *mean, *sigma, *alpha1, *n1, *alpha2, *n2);
-
-      if(selection == 20) {
-        alpha1   ->setVal( 0.101064 ); // +/- 0.748468
-        alpha2   ->setVal( 3.65888  ); // +/- 875.439
-        mean     ->setVal( -0.299851); // +/- 0.0237112
-        n1       ->setVal( 29.6829  ); // +/- 101.184
-        n2       ->setVal( 24.8761  ); // +/- 1.53563e+07
-        sigma    ->setVal( 0.0127344); // +/- 0.111337
-      }
+      resolution = new RooCrystalBall(Form("%s_res_pdf"  , name), "DIO resolution", *shifted_obs, *mean, *sigma, *alpha1, *n1, *alpha2, *n2);
 
       alpha1 ->setConstant(freeze);
       alpha2 ->setConstant(freeze);
@@ -225,10 +220,10 @@ pdf_info get_dio_model(RooRealVar& obs, const TString process, const int selecti
     RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 3.05506, 0.01, 10.0);
     pdf = new RooGenericPdf(Form("%s_pdf", name), "Gamma-Poly Hybrid",
                                  Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
-                                      obs.GetName(), x0->GetName(), alpha->GetName(),
-                                      obs.GetName(), beta->GetName(),
-                                      lambda->GetName(), obs.GetName()),
-                                 RooArgList(obs, *x0, *alpha, *beta, *lambda));
+                                      shifted_obs->GetName(), x0->GetName(), alpha->GetName(),
+                                      shifted_obs->GetName(), beta->GetName(),
+                                      lambda->GetName(), shifted_obs->GetName()),
+                                 RooArgList(*shifted_obs, *x0, *alpha, *beta, *lambda));
   }
 
   const double rate_per_run1 = 10000.; //FIXME

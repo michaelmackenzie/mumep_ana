@@ -202,6 +202,7 @@ double evaluate_norm(TString name, TFile* f, const DatasetInfo_t& info) {
 
   return scale;
 }
+
 double evaluate_yield(Sample_t& sample, TString cut_string) {
   TCut cut("weight * (" + cut_string + ")");
   TH1F* hist = new TH1F("hist", "hist", 1, -1e20, 1e20);
