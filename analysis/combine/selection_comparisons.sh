@@ -42,9 +42,9 @@ for CARD in $CARDS; do
         COMMAND="cls_toys.sh datacards/combine_total_${CARD}.txt"
         echo ${COMMAND}
         ${COMMAND}
-        COMMAND="cls_toys.sh datacards/combine_total_${CARD}.txt"
-        echo ${COMMAND} \"${FREEZE}\"
-        ${COMMAND} "${FREEZE}"
+        # COMMAND="cls_toys.sh datacards/combine_total_${CARD}.txt"
+        # echo ${COMMAND} \"${FREEZE}\"
+        # ${COMMAND} "${FREEZE}"
     fi
 done
 
