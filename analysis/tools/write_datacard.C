@@ -1,6 +1,8 @@
 #ifndef __CONVANA_TOOLS_WRITEDATACARD__
 #define __CONVANA_TOOLS_WRITEDATACARD__
 
+#include <functional>
+
 struct card_info_t {
   TString name_ = "";
   double  rate_ = 0.;
@@ -10,11 +12,137 @@ struct card_info_t {
     name_(name), rate_(rate), selection_(selection), floating_(floating) {}
 };
 
-int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString file_in, map<TString, map<TString, bool>> sys_map,
-                   TString outname = "", std::vector<TString> extra_lines = {}) {
+//---------------------------------------------------------------------------------------------------------------------------
+// Rate (lnN) uncertainties: the one definition used by the shape and counting cards
+struct rate_sys_t {
+  TString name_;
+  double  kappa_; // lnN kappa, 1 + relative uncertainty
+  std::function<bool(const TString&)> applies_; // process name --> whether the uncertainty applies
+  rate_sys_t(TString name, double kappa, std::function<bool(const TString&)> applies) :
+    name_(name), kappa_(kappa), applies_(applies) {}
+};
+
+// Process families are named <base> or <base>_<variant>, e.g. rmc_ext_0n
+bool is_process(const TString& name, const TString& base) {
+  return name == base || name.BeginsWith(base + "_");
+}
+
+std::vector<rate_sys_t> rate_systematics() {
+  std::vector<rate_sys_t> sys;
+  sys.push_back(rate_sys_t("lumi", 1.1  , [](const TString& p) { return !is_process(p, "cosmic"); })); // beam intensity, incl. the signal
+  sys.push_back(rate_sys_t("csmN", 1.2  , [](const TString& p) { return  is_process(p, "cosmic"); }));
+  sys.push_back(rate_sys_t("dioN", 1.025, [](const TString& p) { return  is_process(p, "dio"   ); }));
+  sys.push_back(rate_sys_t("rpcN", 1.27 , [](const TString& p) { return  is_process(p, "rpc"   ); }));
+  sys.push_back(rate_sys_t("pbrN", 2.0  , [](const TString& p) { return  is_process(p, "pbar"  ); }));
+  sys.push_back(rate_sys_t("rmcN", 1.079, [](const TString& p) { return  is_process(p, "rmc"   ); })); // 1.40 +- 0.11 (TRIUMF, 1999)
+  sys.push_back(rate_sys_t("intN", 1.045, [](const TString& p) { return  p.Contains("_int"     ); })); // internal conversion: 0.0069 +- 0.00031
+  return sys;
+}
+
+//---------------------------------------------------------------------------------------------------------------------------
+// Effect of one shape systematic on one process
+struct shape_sys_t {
+  bool   has_up_    = false;
+  bool   has_down_  = false;
+  double norm_nom_  = 0.;
+  double norm_up_   = 0.;
+  double norm_down_ = 0.;
+  bool   complete    () const { return has_up_ && has_down_; }
+  double kappa_up    () const { return (norm_nom_ > 0.) ? norm_up_   / norm_nom_ : 1.; }
+  double kappa_down  () const { return (norm_nom_ > 0.) ? norm_down_ / norm_nom_ : 1.; }
+  bool   changes_norm() const { return std::fabs(kappa_up() - 1.) > 1.e-3 || std::fabs(kappa_down() - 1.) > 1.e-3; }
+};
+typedef std::map<TString, std::map<TString, shape_sys_t>> shape_sys_map_t; // systematic --> process --> effect
+
+//---------------------------------------------------------------------------------------------------------------------------
+// Card writing helpers shared by the shape and counting cards
+namespace datacard {
+  bool is_signal(const card_info_t& info, const TString& signal_name) {
+    return info.name_ == signal_name || info.name_ == "signal";
+  }
+
+  int column_width(const std::vector<card_info_t>& infos, const TString& bin_name) {
+    int width = std::max(10, bin_name.Length());
+    for(auto& info : infos) width = std::max(width, info.name_.Length());
+    return width;
+  }
+
+  TString separator(const std::vector<card_info_t>& infos, const int width) {
+    return TString(std::string(15 + infos.size()*(width + 1), '-'));
+  }
+
+  TString row(const TString& label, const std::vector<TString>& entries, const int width) {
+    TString line = Form("%-15s", label.Data());
+    for(auto& entry : entries) line += Form(" %-*s", width, entry.Data());
+    return line;
+  }
+
+  bool open(std::ofstream& outfile, const TString& outname) {
+    const TString dir = gSystem->GetDirName(outname);
+    if(dir != "" && dir != ".") gSystem->mkdir(dir, true);
+    outfile.open(outname.Data());
+    if(!outfile.is_open()) {
+      cout << "datacard::" << __func__ << ": Unable to open " << outname.Data() << " for writing\n";
+      return false;
+    }
+    return true;
+  }
+
+  // bin/process/rate block: the signal is process 0, backgrounds are numbered 1..N
+  void write_processes(std::ofstream& outfile, const std::vector<card_info_t>& infos, const TString& signal_name,
+                       const TString& bin_name, const int width, const TString& sep) {
+    std::vector<TString> bins, names, ids, rates;
+    int nbkg = 0;
+    for(auto& info : infos) {
+      bins .push_back(bin_name);
+      names.push_back(info.name_);
+      ids  .push_back(Form("%i", (is_signal(info, signal_name)) ? 0 : ++nbkg));
+      // Combine multiplies a parametric shape by its <pdf>_norm variable, so a freely floating
+      // process takes a unit rate here and carries its yield in the workspace
+      rates.push_back(Form("%.4f", (info.floating_) ? 1. : info.rate_));
+    }
+    outfile << sep.Data() << std::endl;
+    outfile << row("bin"    , bins , width).Data() << std::endl;
+    outfile << row("process", names, width).Data() << std::endl;
+    outfile << row("process", ids  , width).Data() << std::endl;
+    outfile << row("rate"   , rates, width).Data() << std::endl << std::endl;
+  }
+
+  // lnN rate uncertainties. A data-driven, freely floating process takes none, and an
+  // uncertainty that affects no process in the card is left out.
+  void write_rate_systematics(std::ofstream& outfile, const std::vector<card_info_t>& infos, const int width, const TString& sep) {
+    outfile << sep.Data() << std::endl;
+    for(auto& sys : rate_systematics()) {
+      std::vector<TString> entries;
+      bool used = false;
+      for(auto& info : infos) {
+        const bool applies = !info.floating_ && sys.applies_(info.name_);
+        used |= applies;
+        entries.push_back((applies) ? TString(Form("%.3f", sys.kappa_)) : TString("-"));
+      }
+      if(used) outfile << row(Form("%-10s %-4s", sys.name_.Data(), "lnN"), entries, width).Data() << std::endl;
+    }
+    outfile << sep.Data() << std::endl;
+  }
+
+  void write_footer(std::ofstream& outfile) {
+    // yield scale factor, useful for scanning livetimes
+    outfile << "yieldScale rateParam * * 1." << std::endl;
+    outfile << "nuisance edit freeze yieldScale" << std::endl;
+  }
+}
+
+//---------------------------------------------------------------------------------------------------------------------------
+// Shape card for the workspace written by build_model. The up/down PDFs of a shape systematic are
+// expected as <nominal pdf>_<sys>Up/Down. Combine ignores the yield of PDF shape variations and does
+// not allow a shape and an lnN line of the same name, so a normalization effect has to be carried
+// by a <nominal pdf>_norm term in the workspace (build_model adds it). use_es enables the
+// energy-scale nuisance of the function models.
+int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString file_in, const shape_sys_map_t& shape_sys,
+                   TString outname = "", std::vector<TString> extra_lines = {}, const bool use_es = true) {
 
   if(infos.empty()) {
-    cout << __func__ << ": Not process information was given\n";
+    cout << __func__ << ": No process information was given\n";
     return -1;
   }
 
@@ -56,7 +184,7 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
   if(!sig_eff) {
     cout << "Reference signal efficiency not found in file " << file_in.Data() << endl;
   }
-  RooDataHist* data = (RooDataHist*) ws->data("data_obs");
+  RooAbsData* data = ws->data("data_obs");
   if(!data) {
     cout << "No data found in file " << file_in.Data() << endl;
     return 4;
@@ -70,11 +198,20 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
   }
   const char* obs_name = obs->GetName();
 
+  // Every process needs its PDF, or the card columns and the workspace disagree
+  auto pdf_name = [&](const TString& proc) { return TString(Form("%s_%i_%s_pdf", signal_name.Data(), selection, proc.Data())); };
+  for(auto& info : infos) {
+    if(!ws->pdf(pdf_name(info.name_))) {
+      cout << __func__ << ": PDF " << pdf_name(info.name_).Data() << " not found in file " << file_in.Data() << endl;
+      return 6;
+    }
+  }
+
   //Make the combine card
-  gSystem->Exec("[ ! -d datacards ] && mkdir datacards");
   std::ofstream outfile;
-  outfile.open(outname.Data());
-  TString filler = std::string((infos.size()+1)*10 + 15, '-');
+  if(!datacard::open(outfile, outname)) return 7;
+  const int width = datacard::column_width(infos, obs_name);
+  const TString filler = datacard::separator(infos, width);
   outfile << "# -*- mode:tcl; eval: (whitespace-mode 0) -*-\n# Auto-generated Combine data card\n";
   outfile << Form("# R_mue used for signal: %.3e\n", ref_br->getVal());
   if(npot) outfile << Form("# N(POT): %.3e\n", npot->getVal());
@@ -94,119 +231,60 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
                   signal_name.Data(), selection, signal_name.Data(), selection);
   outfile << Form("shapes data_obs %s %s workspace:data_obs\n\n", obs_name, file_in.Data());
   outfile << filler.Data() << std::endl;
-  // outfile << "bin " << obs_name << endl;
   outfile << "observation " << Form("%.0f", data->sumEntries()) << std::endl << std::endl;
-  // outfile << "observation 0\n\n";
 
-  TString bins   = Form("%-15s", "bin"    );
-  TString proc_n = Form("%-15s", "process");
-  TString proc_i = Form("%-15s", "process");
-  TString rates  = Form("%-15s", "rate"   );
-  std::vector<TString> systematics;
-  int ncats = 0;
-  for(size_t index = 0; index < infos.size(); ++index) {
-    auto& info = infos[index];
-    // Check for the input information in the workspace
-    const char* pdf_name = Form("%s_%i_%s_pdf", signal_name.Data(), selection, info.name_.Data());
-    auto pdf = ws->pdf(pdf_name);
-    if(!pdf) {
-      cout << "PDF " << pdf_name << " not found in file " << file_in.Data() << endl;
-      continue;
-    }
-
-    const bool is_signal = info.name_ == signal_name || info.name_ == "signal";
-    if(is_signal) {
-      ++ncats;
-    }
-    const bool is_cosmic = info.name_.Contains("cosmic");
-    const bool is_dio    = info.name_.Contains("dio");
-    const bool is_rpc    = info.name_.Contains("rpc");
-    const bool is_pbar   = info.name_.Contains("pbar");
-    const bool is_rmc    = info.name_.Contains("rmc");
-    const bool is_rmc_0n = info.name_.Contains("0n") && is_rmc;
-    const bool is_rmc_1n = info.name_.Contains("1n") && is_rmc;
-    const bool is_int    = info.name_.Contains("_int");
-    const int category = (is_signal) ? 0 : ncats;
-    bins += Form(" %-10s", obs_name);
-    proc_n += Form(" %-10s", info.name_.Data());
-    proc_i += Form(" %-10i", category);
-    // Combine multiplies a parametric shape by its <pdf>_norm variable, so a freely floating
-    // process takes a unit rate here and carries its yield in the workspace
-    rates  += Form(" %-10.4f", (info.floating_) ? 1. : info.rate_);
-
-    if(index == 0) {
-      systematics.push_back(Form("%-10s %-4s", "lumi", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "csmN", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "dioN", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "rpcN", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "pbrN", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "rmcN", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "intN", "lnN"));
-      // systematics.push_back(Form("%-10s %-4s", "rmcN", "lnN"));
-    }
-    // A data-driven, freely floating process takes no rate uncertainties
-    const bool rate_sys = !info.floating_;
-    if(rate_sys && !is_cosmic) systematics[0] += Form(" %-10.3f", 1.1);
-    else                       systematics[0] += Form(" %-10s", "-");
-    if(rate_sys && is_cosmic ) systematics[1] += Form(" %-10.3f", 1.2);
-    else                       systematics[1] += Form(" %-10s", "-");
-    if(rate_sys && is_dio    ) systematics[2] += Form(" %-10.3f", 1.025);
-    else                       systematics[2] += Form(" %-10s", "-");
-    if(rate_sys && is_rpc    ) systematics[3] += Form(" %-10.3f", 1.27);
-    else                       systematics[3] += Form(" %-10s", "-");
-    if(rate_sys && is_pbar   ) systematics[4] += Form(" %-10.3f", 2.0);
-    else                       systematics[4] += Form(" %-10s", "-");
-    if(rate_sys && is_rmc    ) systematics[5] += Form(" %-10.3f", 1.079);
-    else                       systematics[5] += Form(" %-10s", "-");
-    if(rate_sys && is_int    ) systematics[6] += Form(" %-10.3f", 1.045);
-    else                       systematics[6] += Form(" %-10s", "-");
-    // // Systematics
-    // outfile << "lumi   lnN     1.1        1.1         -         1.1        1.1        1.1\n";
-    // outfile << "sigN   lnN     1.04        -          -          -          -          -\n";
-    // outfile << "dioN   lnN      -        1.025        -          -          -          -\n";
-    // outfile << "csmN   lnN      -          -         1.2         -          -          -\n";
-    // outfile << "pbrN   lnN      -          -          -         2.0         -          -\n";
-    // outfile << "rpcN   lnN      -          -          -          -        1.093      1.093\n";
-    // outfile << "rpiN   lnN      -          -          -          -          -        1.045\n";
-    // outfile << "pion   lnN      -          -          -          -         1.27       1.27\n";
-    // outfile << "MomScale shape  1          1          -          -          -          -\n";
-  }
-
-  outfile << filler.Data() << std::endl;
-  outfile << bins.Data() << std::endl;
-  outfile << proc_n.Data() << std::endl;
-  outfile << proc_i.Data() << std::endl;
-  outfile << rates.Data() << std::endl << std::endl;
+  datacard::write_processes(outfile, infos, signal_name, obs_name, width, filler);
 
   // rate uncertainties
-  outfile << filler.Data() << std::endl;
-  for(auto sys : systematics) outfile << sys.Data() << std::endl;
-  outfile << filler.Data() << std::endl;
+  datacard::write_rate_systematics(outfile, infos, width, filler);
 
-  // shape uncertainties
-  if(sys_map.size() > 0) outfile << std::endl << filler.Data() << std::endl;
-  for(auto sys : sys_map) {
-    TString line = Form("%-10s shape", sys.first.Data());
-    for(size_t index = 0; index < infos.size(); ++index) {
-      auto& info = infos[index];
-      if(sys.second[info.name_]) line += Form(" %-10i", 1);
-      else                       line += Form(" %-10s", "-");
+  // shape uncertainties: Combine needs both the up and the down PDF of every process a line names
+  std::vector<TString> shape_lines;
+  std::vector<TString> shape_comments;
+  for(auto& sys : shape_sys) {
+    std::vector<TString> entries;
+    bool used = false;
+    for(auto& info : infos) {
+      bool applies = false;
+      auto effect = sys.second.find(info.name_);
+      if(effect != sys.second.end() && !info.floating_) {
+        const TString base = pdf_name(info.name_);
+        const bool found_up   = ws->pdf(base + "_" + sys.first + "Up"  );
+        const bool found_down = ws->pdf(base + "_" + sys.first + "Down");
+        applies = effect->second.complete() && found_up && found_down;
+        if(!applies) {
+          cout << __func__ << ": Dropping shape systematic " << sys.first.Data() << " for " << info.name_.Data()
+               << ", its " << ((found_up) ? "down" : (found_down) ? "up" : "up and down") << " PDF is missing\n";
+        } else if(effect->second.changes_norm()) {
+          shape_comments.push_back(Form("# %s changes the %s yield by %+.2f%% / %+.2f%% (up / down) via %s_norm\n",
+                                        sys.first.Data(), info.name_.Data(),
+                                        100.*(effect->second.kappa_up() - 1.), 100.*(effect->second.kappa_down() - 1.),
+                                        base.Data()));
+        }
+      }
+      used |= applies;
+      entries.push_back((applies) ? "1" : "-");
     }
-    outfile << line.Data() << std::endl;
+    if(used) shape_lines.push_back(datacard::row(Form("%-10s %-4s", sys.first.Data(), "shape"), entries, width));
   }
-  if(sys_map.size() > 0) outfile << filler.Data() << std::endl;
+  if(!shape_lines.empty()) {
+    outfile << std::endl << filler.Data() << std::endl;
+    for(auto& comment : shape_comments) outfile << comment.Data();
+    for(auto& line : shape_lines) outfile << line.Data() << std::endl;
+    outfile << filler.Data() << std::endl;
+  }
 
   // constrained params: the energy-scale nuisance is the <process>_<selection>_es variable the
   // signal/DIO function models shift with (signal_model.C, background_model.C). Combine makes it
   // float when a param line names it; histogram models have no such variable, and a param line
   // would then only add a disconnected nuisance, so it is written only when the model uses it.
+  // Without the param line the variable stays constant at its nominal value.
   const TString es_name = Form("%s_%i_es", signal_name.Data(), selection);
   RooRealVar* es_var = ws->var(es_name.Data());
   bool es_used = false;
-  if(es_var) {
+  if(use_es && es_var) {
     for(auto& info : infos) {
-      RooAbsPdf* pdf = ws->pdf(Form("%s_%i_%s_pdf", signal_name.Data(), selection, info.name_.Data()));
-      if(pdf && pdf->dependsOn(*es_var)) { es_used = true; break; }
+      if(ws->pdf(pdf_name(info.name_))->dependsOn(*es_var)) { es_used = true; break; }
     }
   }
   if(es_used) {
@@ -221,35 +299,33 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
     outfile << filler.Data() << std::endl;
   }
 
-  // outfile << "\n* autoMCStats 0\n"; //MC statistics uncertainty
-
-  // yield scale factor, useful for scanning livetimes
-  outfile << "yieldScale rateParam * * 1." << std::endl;
-  outfile << "nuisance edit freeze yieldScale" << std::endl;
-
+  datacard::write_footer(outfile);
   outfile.close();
+  f->Close();
 
   return 0;
 }
 
+//---------------------------------------------------------------------------------------------------------------------------
+// Counting card, written to outname as given
 int write_counting_datacard(TString signal_name, std::vector<card_info_t> infos,
                             TString outname, int nobs, double npot = -1., double livetime = -1., double nmuons = -1.,
                             double ref_br = -1., double signal_eff = -1.,
                             double xmin = 1., double xmax = -1.) {
 
   if(infos.empty()) {
-    cout << __func__ << ": Not process information was given\n";
+    cout << __func__ << ": No process information was given\n";
     return -1;
   }
 
   const int selection = infos[0].selection_; //assume fixed for all categories
-  const char* obs_name = Form("obs_%i", selection);
+  const TString obs_name = Form("obs_%i", selection);
 
   //Make the combine card
-  gSystem->Exec("[ ! -d datacards ] && mkdir datacards");
   std::ofstream outfile;
-  outfile.open(outname.Data());
-  TString filler = std::string((infos.size()+1)*10 + 15, '-');
+  if(!datacard::open(outfile, outname)) return 7;
+  const int width = datacard::column_width(infos, obs_name);
+  const TString filler = datacard::separator(infos, width);
   outfile << "# -*- mode:tcl; eval: (whitespace-mode 0) -*-\n# Auto-generated Combine data card\n";
   if(ref_br > 0.) outfile << Form("# R_mue used for signal: %.3e\n", ref_br);
   if(npot > 0.) outfile << Form("# N(POT): %.3e\n", npot);
@@ -263,64 +339,14 @@ int write_counting_datacard(TString signal_name, std::vector<card_info_t> infos,
 
   outfile << "observation " << Form("%i", nobs) << std::endl << std::endl;
 
-  TString bins   = Form("%-15s", "bin"    );
-  TString proc_n = Form("%-15s", "process");
-  TString proc_i = Form("%-15s", "process");
-  TString rates  = Form("%-15s", "rate"   );
-  std::vector<TString> systematics;
-  int ncats = 0;
-  for(size_t index = 0; index < infos.size(); ++index) {
-    auto& info = infos[index];
-
-    const bool is_signal = info.name_ == signal_name || info.name_ == "signal";
-    if(!is_signal) {
-      ++ncats;
-    }
-    const bool is_cosmic = info.name_.Contains("cosmic");
-    const bool is_dio    = info.name_.Contains("dio");
-    const bool is_rpc    = info.name_.Contains("rpc");
-    const bool is_pbar   = info.name_.Contains("pbar");
-    const bool is_rmc    = info.name_.Contains("rmc");
-    const int category = (is_signal) ? 0 : ncats;
-    bins += Form(" %-10s", obs_name);
-    proc_n += Form(" %-10s", info.name_.Data());
-    proc_i += Form(" %-10i", category);
-    rates  += Form(" %-10.4f", info.rate_);
-
-    if(index == 0) {
-      systematics.push_back(Form("%-10s %-4s", "lumi", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "csmN", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "dioN", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "rpcN", "lnN"));
-      systematics.push_back(Form("%-10s %-4s", "pbrN", "lnN"));
-    }
-    if(!is_cosmic) systematics[0] += Form(" %-10.3f", 1.1);
-    else           systematics[0] += Form(" %-10s", "-");
-    if(is_cosmic ) systematics[1] += Form(" %-10.3f", 1.2);
-    else           systematics[1] += Form(" %-10s", "-");
-    if(is_dio    ) systematics[2] += Form(" %-10.3f", 1.025);
-    else           systematics[2] += Form(" %-10s", "-");
-    if(is_rpc    ) systematics[3] += Form(" %-10.3f", 1.27);
-    else           systematics[3] += Form(" %-10s", "-");
-    if(is_pbar   ) systematics[4] += Form(" %-10.3f", 2.0);
-    else           systematics[4] += Form(" %-10s", "-");
-  }
-
-  outfile << filler.Data() << std::endl;
-  outfile << bins.Data() << std::endl;
-  outfile << proc_n.Data() << std::endl;
-  outfile << proc_i.Data() << std::endl;
-  outfile << rates.Data() << std::endl << std::endl;
+  // A counting card has no workspace to carry a floating yield, so every rate is used as given
+  for(auto& info : infos) info.floating_ = false;
+  datacard::write_processes(outfile, infos, signal_name, obs_name, width, filler);
 
   // rate uncertainties
-  outfile << filler.Data() << std::endl;
-  for(auto sys : systematics) outfile << sys.Data() << std::endl;
-  outfile << filler.Data() << std::endl;
+  datacard::write_rate_systematics(outfile, infos, width, filler);
 
-  // yield scale factor, useful for scanning livetimes
-  outfile << "yieldScale rateParam * * 1." << std::endl;
-  outfile << "nuisance edit freeze yieldScale" << std::endl;
-
+  datacard::write_footer(outfile);
   outfile.close();
 
   return 0;

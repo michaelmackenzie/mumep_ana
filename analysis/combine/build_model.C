@@ -13,25 +13,78 @@ bool print_      = true;
 bool write_card_ = true;
 
 //---------------------------------------------------------------------------------------------------------------------------
-struct RateUnc_t {
-  TString name;
-  double value;
-  bool isBeam;
-  TString process;
-  RateUnc_t(TString name, double value, bool isBeam = false, TString process = "") :
-    name(name), value(value), isBeam(isBeam), process(process) {}
-};
+// Read the shape systematic variations of each process, import their PDFs into the workspace as
+// <nominal pdf>_<sys>Up/Down, and record their yields. Systematics named in skip are left out.
+shape_sys_map_t add_shape_systematics(RooWorkspace& ws, TFile* fout, const std::vector<pdf_info>& infos,
+                                      const TString& process, const int selection, const TString& tag,
+                                      const RooRealVar& obs, const std::set<TString>& skip = {}) {
+  shape_sys_map_t shape_sys;
+  // the variations share only the observable with the nominal model; their other parameters
+  // would collide with the nominal ones of the same name, so they are renamed
+  const TString shared_vars = obs.GetName();
+  for(int isys = 1; isys < mumep_ana::kMaxSystematics; ++isys) {
+    const TString sys_name = fSystematics.GetName(isys);
+    if(sys_name == "" || skip.count(sys_name)) continue;
+    const bool is_up = fSystematics.IsUp(isys);
+    const TString side = sys_name + ((is_up) ? "Up" : "Down");
+    for(auto& info : infos) {
+      auto sys_pdf = read_model(info.name_, process, selection, tag, isys);
+      if(!sys_pdf.pdf_ || !sys_pdf.norm_ || !sys_pdf.hist_) continue;
+      const TString pdf_name = Form("%s_%s", info.pdf_->GetName(), side.Data());
+      if(TString(sys_pdf.pdf_->GetName()) != info.pdf_->GetName()) {
+        cout << __func__ << ": Variation " << side.Data() << " of " << info.name_.Data() << " is named "
+             << sys_pdf.pdf_->GetName() << ", not " << info.pdf_->GetName() << ", skipping it\n";
+        continue;
+      }
+      // RenameAllNodes appends _<side>, giving the <nominal pdf>_<sys>Up/Down name the card expects
+      ws.import(*sys_pdf.pdf_, RooFit::RenameAllNodes(side), RooFit::RenameAllVariablesExcept(side, shared_vars),
+                RooFit::Silence());
+      if(!ws.pdf(pdf_name)) {
+        cout << __func__ << ": Failed to import " << pdf_name.Data() << " into the workspace\n";
+        continue;
+      }
+      fout->cd();
+      sys_pdf.hist_->SetName(Form("%s_%s", sys_pdf.hist_->GetName(), side.Data()));
+      sys_pdf.hist_->Write();
 
-std::vector<RateUnc_t> rate_uncertainties(TString process) {
-  std::vector<RateUnc_t> sys;
-  sys.push_back(RateUnc_t("lumi"  , 0.1  , true               ));
-  sys.push_back(RateUnc_t("cosmic", 0.2  , false, "cosmic"    ));
-  sys.push_back(RateUnc_t("dio"   , 0.025, false, "dio"       ));
-  sys.push_back(RateUnc_t("rpc"   , 0.27 , false, "rpc"       ));
-  sys.push_back(RateUnc_t("pbar"  , 1.   , false, "pbar"      ));
-  sys.push_back(RateUnc_t("rmc"   , 0.079, false, "rmc"       )); // 1.40 +- 0.11 (TRIUMF, 1999)
-  sys.push_back(RateUnc_t("rmc"   , 0.045, false, "rmc_int"   )); // 0.0069 ± 0.00031
-  return sys;
+      auto& effect = shape_sys[sys_name][info.name_];
+      effect.norm_nom_ = info.rate_;
+      if(is_up) { effect.has_up_   = true; effect.norm_up_   = sys_pdf.norm_->getVal(); }
+      else      { effect.has_down_ = true; effect.norm_down_ = sys_pdf.norm_->getVal(); }
+    }
+  }
+  return shape_sys;
+}
+
+// Combine ignores the yield of a PDF shape variation, so the normalization effect of the shape
+// systematics enters as a <nominal pdf>_norm = prod_i AsymPow(kappa_down_i, kappa_up_i, theta_i),
+// with theta_i the shape systematic's own nuisance, multiplying the card rate
+int add_shape_norm_terms(RooWorkspace& ws, const shape_sys_map_t& shape_sys, const std::vector<pdf_info>& infos) {
+  for(auto& info : infos) {
+    RooArgList terms;
+    for(auto& sys : shape_sys) {
+      auto effect = sys.second.find(info.name_);
+      if(effect == sys.second.end() || !effect->second.complete() || !effect->second.changes_norm()) continue;
+      RooRealVar* theta = ws.var(sys.first);
+      if(!theta) {
+        ws.import(RooRealVar(sys.first, sys.first, 0., -4., 4.), RooFit::Silence());
+        theta = ws.var(sys.first);
+      }
+      const TString kappa_name = Form("%s_%s_kappa", info.pdf_->GetName(), sys.first.Data());
+      terms.add(*(new AsymPow(kappa_name, kappa_name,
+                              *(new RooConstVar(kappa_name + "_down", "", effect->second.kappa_down())),
+                              *(new RooConstVar(kappa_name + "_up"  , "", effect->second.kappa_up  ())),
+                              *theta)));
+    }
+    if(terms.getSize() == 0) continue;
+    const TString norm_name = Form("%s_norm", info.pdf_->GetName());
+    if(ws.arg(norm_name)) {
+      cout << __func__ << ": " << norm_name.Data() << " already exists, its shape systematic yield effects are dropped\n";
+      return 1;
+    }
+    ws.import(RooProduct(norm_name, "Shape systematic yield effects", terms), RooFit::RecycleConflictNodes(), RooFit::Silence());
+  }
+  return 0;
 }
 
 const TH1* preferred_momentum_hist(const pdf_info& info) {
@@ -616,52 +669,31 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     delete bkg_expected;
   }
 
-  // Add systematic uncertainties
-  map<TString,map<TString, bool>> sys_map;
-  if(include_sys_) {
-    // Shape-based uncertainties
-    for(int isys = 1; isys < mumep_ana::kMaxSystematics; ++isys) {
-      TString sys_name = fSystematics.GetName(isys);
-      if(sys_name == "") continue;
-      const bool is_up = fSystematics.IsUp(isys);
-      auto total_infos = background_model; total_infos.push_back(signal_model);
-      for(auto& info : total_infos) {
-        auto sys_pdf = read_model(info.name_, process, selection, tag, isys);
-        if(!sys_pdf.pdf_ ) continue;
-        if(!sys_pdf.norm_) continue;
-        if(!sys_pdf.hist_) continue;
-        fout->cd();
-        sys_map[sys_name][info.name_] = true;
-        sys_pdf.hist_->SetName(Form("%s_%s%s", sys_pdf.hist_->GetName(), sys_name.Data(), (is_up) ? "Up" : "Down"));
-        sys_pdf.hist_->Write();
-        sys_pdf.pdf_->SetName(Form("%s_%s%s", sys_pdf.pdf_->GetName(), sys_name.Data(), (is_up) ? "Up" : "Down"));
-        ws.import(*sys_pdf.pdf_);
-        sys_pdf.norm_->SetName(Form("%s_%s%s_norm", sys_pdf.pdf_->GetName(), sys_name.Data(), (is_up) ? "Up" : "Down"));
-        ws.import(*sys_pdf.norm_);
-      }
-    }
+  // The MC-modeled processes; the data-driven envelope takes no systematic uncertainties
+  std::vector<pdf_info> mc_infos = {signal_model};
+  for(auto& bkg : background_model) {
+    if(!envelope.pdf_ || bkg.pdf_ != envelope.pdf_) mc_infos.push_back(bkg);
+  }
 
-    // Rate-based uncertainties
-    auto rate_sys = rate_uncertainties(process);
-    for(auto& sys : rate_sys) {
-      // Add the signal model
-      if(sys.isBeam || sys.process.Contains("signal")) {
-        RooRealVar sig_impact(Form("%s_%i_signal_RateSys_%s", process.Data(), selection, sys.name.Data()),
-                              Form("signal uncertainty from %s", sys.name.Data()), sys.value);
-        ws.import(sig_impact);
-      }
-      // Add the background model
-      for(auto& bkg : background_model) {
-        bool include = false;
-        include |= sys.isBeam && !bkg.name_.Contains("cosmic");
-        include |= sys.process != "" && sys.process.Contains(bkg.name_);
-        if(include) {
-          cout << "Including rate uncertainty " << sys.name << " for process " << bkg.name_ << endl;
-          RooRealVar bkg_impact(Form("%s_%i_%s_RateSys_%s", process.Data(), selection, bkg.name_.Data(), sys.name.Data()),
-                                Form("%s uncertainty from %s", bkg.name_.Data(), sys.name.Data()), sys.value);
-          ws.import(bkg_impact);
-        }
-      }
+  // Shape uncertainties. The momentum scale enters either as the Scale template variations
+  // (histogram models) or as the <process>_<selection>_es shift of the function models, never both.
+  shape_sys_map_t shape_sys;
+  std::set<TString> skip_sys;
+  if(!hist_pdfs_) skip_sys.insert("Scale");
+  if(include_sys_ && do_2d_fit_) {
+    cout << __func__ << ": Shape systematics are only available for 1D fits, skipping them\n";
+  } else if(include_sys_) {
+    shape_sys = add_shape_systematics(ws, fout, mc_infos, process, selection, tag, obs, skip_sys);
+    if(add_shape_norm_terms(ws, shape_sys, mc_infos)) return 1;
+  }
+
+  // Record the rate uncertainties the card applies, as <process>_<selection>_<component>_RateSys_<name> = kappa - 1
+  for(auto& sys : rate_systematics()) {
+    for(auto& info : mc_infos) {
+      if(!sys.applies_(info.name_)) continue;
+      RooRealVar impact(Form("%s_%i_%s_RateSys_%s", process.Data(), selection, info.name_.Data(), sys.name_.Data()),
+                        Form("%s uncertainty from %s", info.name_.Data(), sys.name_.Data()), sys.kappa_ - 1.);
+      ws.import(impact, RooFit::Silence());
     }
   }
 
@@ -691,7 +723,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     }
     std::vector<TString> extra_lines;
     if(envelope.cat_) extra_lines.push_back(Form("%-10s discrete", envelope.cat_->GetName()));
-    if(write_datacard(process, card_info, ws_file, sys_map, "", extra_lines)) {
+    if(write_datacard(process, card_info, ws_file, shape_sys, "", extra_lines, !hist_pdfs_)) {
       cout << __func__ << ": Data card writing failed!\n";
       return 1;
     }
@@ -741,7 +773,6 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     delete bkg_hist;
 
     // Make the card
-    TString filler = std::string((background_model.size()+2)*10 + 15, '-');
     TString outname = ws_file;
     outname.ReplaceAll(".root", "_cc.txt");
     if(outname.Contains("/")) outname = outname(outname.Last('/')+1, outname.Sizeof());
@@ -758,7 +789,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     }
     const double nexp = nsig + nbkg;
     const double sig_eff_cc = nsig / n_signal_exp;
-    if(write_counting_datacard(process, card_info, outname, (int) nexp, npot_, livetime_, nmuons_, signal_br_, sig_eff_cc, xlow, xhigh)) {
+    if(write_counting_datacard(process, card_info, outname, (int) std::lround(nexp),npot_, livetime_, nmuons_, signal_br_, sig_eff_cc, xlow, xhigh)) {
       cout << __func__ << ": Counting data card writing failed!\n";
       return 1;
     }
