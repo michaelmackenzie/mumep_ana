@@ -472,7 +472,7 @@ int plot_envelope_functions(RooRealVar& obs, RooDataHist& data, const std::vecto
     for(TH1* hh : {h, h_pull}) {
       hh->SetLineColor(color);
       hh->SetMarkerColor(color);
-      hh->SetLineWidth(2);
+      hh->SetLineWidth(3);
       hh->SetStats(0);
     }
     h->SetLineStyle(styles[(ifit/ncolors) % nstyles]);
@@ -521,10 +521,10 @@ int plot_envelope_functions(RooRealVar& obs, RooDataHist& data, const std::vecto
 
   TLegend* leg = new TLegend(0.14, 0.63, 0.96, 0.92);
   leg->SetNColumns(2);
-  leg->SetLineWidth(0); leg->SetFillStyle(0); leg->SetTextFont(42); leg->SetTextSize(0.03);
+  leg->SetLineWidth(0); leg->SetFillStyle(0); leg->SetTextFont(42); leg->SetTextSize(0.035);
   leg->AddEntry(h_data, "Data (sidebands fit)", "PE");
   for(size_t ifit = 0; ifit < fits.size(); ++ifit) {
-    leg->AddEntry(models[ifit], Form("%s: #chi^{2}/dof = %.1f/%i", fits[ifit].label_.Data(),
+    leg->AddEntry(models[ifit], Form("%s: #chi^{2}_{#nu} = %.1f/%i", fits[ifit].label_.Data(),
                                      fits[ifit].chi_sq_, fits[ifit].ndof_), "L");
   }
 
@@ -537,10 +537,12 @@ int plot_envelope_functions(RooRealVar& obs, RooDataHist& data, const std::vecto
     const double ymax = (logy) ? 100.*ymax_data    : 2.2*ymax_data;
     h_data->SetMinimum(ymin);
     h_data->SetMaximum(ymax);
-    h_data->Draw("E1");
+    h_data->SetLineWidth(2);
+    h_data->SetMarkerStyle(20);
+    h_data->Draw("EX0");
     draw_blind_box(std::max(ymin, 0.), ymax);
     for(auto h : models) h->Draw("hist same");
-    h_data->Draw("E1 same");
+    h_data->Draw("EX0 same");
     leg->Draw();
     gPad->RedrawAxis();
   };

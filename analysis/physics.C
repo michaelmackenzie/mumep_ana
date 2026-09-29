@@ -70,6 +70,12 @@ double npot_run1a_           = livetime_run1a_ * npot_rate_1bb_; // livetime * (
 double nmuons_per_pot_run1a_ = 0.000767114;
 double nmuons_run1a_         = npot_run1a_*nmuons_per_pot_run1a_;
 
+// Run 2 info
+double npot_run2_            = 3.e20; // default N(POT)
+double livetime_run2_        = npot_run2_/npot_rate_2bb_; // use 2BB to get livetime
+double nmuons_per_pot_run2_  = 0.000767114;
+double nmuons_run2_          = npot_run2_*nmuons_per_pot_run2_;
+
 // Normalization used, defaulting to Run 1A
 double livetime_       = livetime_run1a_       ; // default to SU2020
 double npot_           = npot_run1a_           ;
@@ -126,6 +132,13 @@ void init_physics(TString tag) {
   npot_           = npot_run1a_            ;
   nmuons_per_pot_ = nmuons_per_pot_run1a_  ;
   nmuons_         = nmuons_per_pot_ * npot_;
+
+  if(tag.Contains("run2") || tag.Contains("run_2")) {
+    livetime_       = livetime_run2_         ;
+    npot_           = npot_run2_             ;
+    nmuons_per_pot_ = nmuons_per_pot_run2_   ;
+    nmuons_         = nmuons_per_pot_ * npot_;
+  }
 
   if(tag.Contains("mds1d")) {
     const float ad_hoc(1.f);

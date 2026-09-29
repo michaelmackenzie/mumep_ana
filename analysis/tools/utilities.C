@@ -72,13 +72,12 @@ TLatex* Mu2e_lumi(const bool is_data, const double npot = -1., const double live
   const int ntens_muons = (nmuons > 0.) ? int(std::log10(nmuons)) : 0;
   const float head_muons = nmuons / std::pow(10.,std::max(0,ntens_muons));
   const float energy =  8.*1.602176634e-10; // 8 GeV proton KE in joules
-  float power = (npot > 0. && livetime > 0.) ? energy * (npot / (livetime/0.323))/1000. : 0.; // in kW
+  const bool  is_1bb = (npot > 0. && livetime > 0. && npot/livetime < 2.e13);
+  const float duty_cycle = (is_1bb) ? 0.323 : 0.246;
+  const float period = (is_1bb) ? 1.33 : 1.4;
+  float power = (npot > 0. && livetime > 0.) ? energy * (npot / (livetime/duty_cycle))/1000. : 0.; // in kW
   // hack to round the power
   if(std::fabs(power - 3.84) < 0.2) power = 3.84;
-  // TString lumistamp = Form("%.1f x 10^{%i} POT; %.1f x 10^{%i} s On-Spill; %.1f x 10^{%i} muon stops",
-  //                          head_pot, ntens_pot,
-  //                          head_time, ntens_time,
-  //                          head_muons, ntens_muons);
   TString lumistamp = Form("%.3g kW beam; %.1f x 10^{%i} s On-Spill; %.1f x 10^{%i} muon stops",
                            power,
                            head_time, ntens_time,
