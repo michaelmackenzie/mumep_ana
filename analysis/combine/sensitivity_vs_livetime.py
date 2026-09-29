@@ -1,26 +1,46 @@
+import argparse
+import os
 import subprocess
 import re
 import matplotlib.pyplot as plt
 import numpy as np
 
 def parse_limit(text, level = r'50\.0', unit = 1.e-15):
-    match = re.search(r"Expected "+level+r"%:\s*r\s*<\s*([\d\.-]+)", output_text)
+    match = re.search(r"Expected "+level+r"%:\s*r\s*<\s*([\d\.-]+)", text)
     if match:
         extracted_value = unit*float(match.group(1))
         return extracted_value
     return -1.
 
 
+# Command line arguments
+parser = argparse.ArgumentParser(description='Expected sensitivity vs. livetime scale factor')
+parser.add_argument('card', help='Input Combine data card (e.g. datacards/combine_total_mumep_40_evt_r0104.txt)')
+parser.add_argument('--step', type=float, default=0.1, help='Livetime scale factor step size (default: %(default)s)')
+parser.add_argument('--min-scale', type=float, default=None, help='Minimum livetime scale factor (default: step size)')
+parser.add_argument('--max-scale', type=float, default=2.0, help='Maximum livetime scale factor, inclusive (default: %(default)s)')
+args = parser.parse_args()
+
+step      = args.step
+min_scale = args.min_scale if args.min_scale is not None else step
+max_scale = args.max_scale
+if step <= 0.: parser.error('--step must be positive')
+if min_scale <= 0.: parser.error('--min-scale must be positive')
+if max_scale < min_scale: parser.error('--max-scale must be >= --min-scale')
+
 # Input data card
-signal   = 'mumep'
-card_tag = 'evt_r0104'
-card_set = '40'
-card_base = f'{signal}_{card_set}_{card_tag}'
-card = f'datacards/combine_total_{card_base}.txt'
+card = args.card
+card_base = os.path.splitext(os.path.basename(card))[0]
+for prefix in ['combine_total_', 'combine_']:
+    if card_base.startswith(prefix):
+        card_base = card_base[len(prefix):]
+        break
+signal = 'mumem' if 'mumem' in card_base else 'mumep'
 r_range = 100. if 'mumem' in signal else 500.
+is_run2 = 'run2' in card_base or 'run_2' in card_base
 
 # Base Combine command
-base_command = f'combine -d {card} --rMin 0. --rMax {r_range} -n .{card_base} -t -1 --cl 0.9 --cminDefaultMinimizerStrategy=0 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1 --rAbsAcc 0.001 --rRelAcc 0.001'
+base_command = f'combine -d {card} --rMin 0. --rMax {r_range} -n .{card_base} -t -1 --cl 0.9 --cminDefaultMinimizerStrategy=0 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1 --rAbsAcc 0.01 --rRelAcc 0.01'
 
 # 90% CL from SINDRUM II
 published_limit = 7.e-13 if 'mumem' in signal else 1.7e-12
@@ -39,9 +59,8 @@ improvements = [] # Improvement factor vs. livetime
 bkg_only     = [] # Expected limit vs. background-only scale factor
 
 # Loop over livetime scale factors
-step = 0.1
 index_nominal = -1
-for index, scale in enumerate(np.arange(step, 2.+step, step)):
+for index, scale in enumerate(np.arange(min_scale, max_scale + step/2., step)):
     if abs(scale - 1.) < step/2.: index_nominal = index
     command = base_command + f' --setParameters yieldScale={scale}'
     
@@ -100,10 +119,10 @@ ax.plot(
 )
 
 # Apply clear labels and aesthetics
-ax.set_xlabel("Relative running time")
-ax.set_ylabel("Median expected upper limit")
-ax.set_title("Expected 50.0% Upper Limits vs. Running Time")
-ax.legend(loc="upper right")
+ax.set_xlabel("Relative running time", fontsize=14)
+ax.set_ylabel("Median expected upper limit", fontsize=15)
+ax.set_title("Expected Upper Limits vs. Running Time", fontsize=16)
+ax.legend(loc="upper right", fontsize=14)
 
 # Save or show the plot
 plt.savefig(f"sensitivity_vs_livetime_{card_base}.png", dpi=300)
