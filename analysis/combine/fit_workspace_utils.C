@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "../tools/utilities.C"
+#include "regions.C"
 
 int enforce_uniform_if_sparse(TH1* h,
                               RooRealVar& obs,
@@ -62,7 +63,8 @@ TString resolve_tail_model(const TString& component, TString requested_tail_mode
 std::vector<int> default_control_region_sets(const TString& component, const int selection) {
   TString c = component;
   c.ToLower();
-  if(c == "cosmic") return {selection + 1000};
+  // the CRV-tagged version of the selection, unless the selection already is CRV-tagged
+  if(c == "cosmic" && !has_region_flag(selection, crv_inverted_offset_)) return {selection + crv_inverted_offset_};
   return {};
 }
 

@@ -26,6 +26,10 @@ double       xmin_em_     =  100.; // Momentum range for mu- --> e- fit
 double       xmax_em_     =  110.;
 double       xmin_ep_     =   87.; // Momentum range for mu- --> e+ fit
 double       xmax_ep_     =   97.;
+double       xmin_ci_em_  =   95.; // Momentum range for the charge-inverted (e+ track) control region of mu- --> e-
+double       xmax_ci_em_  =  105.;
+double       xmin_ci_ep_  =   87.; // Momentum range for the charge-inverted (e- track) control region of mu- --> e+
+double       xmax_ci_ep_  =   97.;
 double       t_min_       =  475.; // Time range for 2D fits
 double       t_max_       = 1650.;
 

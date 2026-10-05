@@ -88,8 +88,13 @@ int fit_component_model(TString process,
   // in the configured histogram directory
   ScopedHistFile hist_file_override(hist_file, dataset_key);
   const bool is_mumem = process == "mumem";
-  const double xmin = (is_mumem) ? xmin_em_ : xmin_ep_;
-  const double xmax = (is_mumem) ? xmax_em_ : xmax_ep_;
+  const region_t region = get_region(process, selection);
+  const double xmin = region.xmin_;
+  const double xmax = region.xmax_;
+  if(component == "signal" && !region.has_signal_) {
+    cout << __func__ << ": The signal is not modeled in selection " << selection << endl;
+    return 3;
+  }
 
   TString figdir;
   if(component == "signal") figdir = Form("figures/signal_%s%s", process.Data(), (tag == "") ? "" : ("_" + tag).Data());
@@ -128,7 +133,10 @@ int fit_component_model(TString process,
   }
   bool did_smooth = false;
 
-  if(tail_model == "convolution" && component == "dio") {
+  // the DIO tail is only smoothed above 102 MeV/c
+  if(tail_model == "convolution" && component == "dio" && xmax <= 102.) {
+    cout << __func__ << ": Fit range ends below the DIO tail, not smoothing it" << endl;
+  } else if(tail_model == "convolution" && component == "dio") {
     const int conv_set = 10;
     TH1* theory = get_background_hist("dio", conv_set, "dio_fit", -1, "MC_GenE");
     TH1* response = get_background_hist("dio", conv_set, "dio_fit", -1, "dP");
@@ -156,7 +164,7 @@ int fit_component_model(TString process,
     int nsmooth(0);
     std::vector<double> init_params;
     get_tail_defaults(component, process, fit_xmin, nsmooth, init_params);
-    if(fit_xmin > 0.) {
+    if(fit_xmin > 0. && fit_xmin < xmax) {
        if(smooth_right_tail(h,
                 h_orig,
                 Form("%s/%s_smoothing_%i%s.png", figdir.Data(), component.Data(), selection,
@@ -284,7 +292,7 @@ int fit_component_model(TString process,
   if(component == "cosmic" && h_control) {
     double n_sig_region  = h->Integral() / (xmax - xmin);
     double n_ctrl_region = h_control->Integral() / (xmax - xmin);
-    if(n_sig_region == 0.) n_sig_region = n_ctrl_region * ((is_mumem) ? 1./754. : 1./471);
+    if(n_sig_region == 0.) n_sig_region = n_ctrl_region * ((region.negative_tracks_) ? 1./754. : 1./471);
     norm_val = n_sig_region * (xmax - xmin);
   }
 

@@ -6,6 +6,9 @@ set -euo pipefail
 Help() {
     echo "Create the signal and background model workspaces"
     echo "Usage: ./perform_fits.sh <process, default \"mumem\"> <selection, default 20> <optional tag> <evt ana> <no sys>"
+    echo "Control regions add flag offsets to the base set (see regions.C):"
+    echo "  + 1000: inverted CRV veto, + 2000: inverted time cut, + 4000: charge-inverted"
+    echo "A charge-inverted region has no signal fit, and only e- track regions get a DIO fit"
     echo "Environment overrides:"
     echo "  FIT_PDF_TYPE        Global PDF type (default, auto, hist, uniform, poly, polyN, cb, analytic)"
     echo "  FIT_TAIL_MODEL      Global tail model (default, exp, power, convolution, none)"
@@ -35,6 +38,20 @@ if [[ "${PROCESS}" == "" ]]; then
 fi
 if [[ "${SELECTION}" == "" ]]; then
     SELECTION="20"
+fi
+
+# Control region flags are added to the base set: + 1000 inverted CRV veto, + 2000 inverted
+# time cut, + 4000 charge-inverted (see regions.C). Only the charge inversion changes the fits.
+CHARGE_INVERTED=""
+if (( (SELECTION / 1000) & 4 )); then
+    CHARGE_INVERTED="1"
+fi
+# The selected tracks are e- in the mu- --> e- signal region and the mu- --> e+ control region
+NEGATIVE_TRACKS=""
+if [[ "${PROCESS}" == "mumem" ]] && [[ "${CHARGE_INVERTED}" == "" ]]; then
+    NEGATIVE_TRACKS="1"
+elif [[ "${PROCESS}" != "mumem" ]] && [[ "${CHARGE_INVERTED}" != "" ]]; then
+    NEGATIVE_TRACKS="1"
 fi
 
 # run_fit <macro> [knockout]
@@ -96,14 +113,16 @@ run_fit() {
     fi
 }
 
-run_fit signal_fit
+if [[ "${CHARGE_INVERTED}" == "" ]]; then
+    run_fit signal_fit
+fi
 run_fit cosmic_fit
 run_fit rpc_ext_fit
 run_fit rpc_int_fit
 if [[ 1 ]] || [[ "${EVTANA}" == "" ]]; then
     run_fit pbar_fit
 fi
-if [[ "${PROCESS}" == "mumem" ]]; then
+if [[ "${NEGATIVE_TRACKS}" != "" ]]; then
     run_fit dio_fit
 fi
 if [[ "${PROCESS}" == "mumep" ]]; then
@@ -112,11 +131,14 @@ if [[ "${PROCESS}" == "mumep" ]]; then
         run_fit rmc_int_fit "${KNOCKOUT}"
         run_fit rmc_ext_fit "${KNOCKOUT}"
     done
-elif [[ "${EVTANA}" != "" ]]; then
+elif [[ "${EVTANA}" != "" ]] || [[ "${CHARGE_INVERTED}" != "" ]]; then
+    # a charge-inverted control region is there to constrain RMC, so it always models it
     run_fit rmc_int_fit
     run_fit rmc_ext_fit
 fi
-if [[ "${NOSYS}" == "" ]]; then
+if [[ "${NOSYS}" == "" ]] && [[ "${CHARGE_INVERTED}" != "" ]]; then
+    echo "Skipping systematics fit for control region ${SELECTION} (it varies the signal model)"
+elif [[ "${NOSYS}" == "" ]]; then
     run_fit systematics
 else
     echo "Skipping systematics fit (--no-sys enabled)"

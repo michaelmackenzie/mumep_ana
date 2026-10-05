@@ -6,6 +6,7 @@
 #include "../datasets.C"
 #include "../physics.C"
 #include "model_io_utils.C"
+#include "regions.C"
 #include "RooStitchedPdf.cxx"
 #include "../tools/utilities.C"
 #include "../tools/families.C"
@@ -42,9 +43,8 @@ TH1* get_data_hist(const TString process, const int selection, TString tag = "")
 RooDataHist* get_data(RooRealVar& obs, const TString process, const int selection, TString tag = "") {
   TH1* data = get_data_hist(process, selection, tag);
   if(!data) return nullptr;
-  const bool is_mumem = process == "mumem";
-  const float xmin(is_mumem ? xmin_em_ : xmin_ep_), xmax(is_mumem ? xmax_em_ : xmax_ep_);
-  data = trim_hist(data, xmin, xmax); // restrict to the relevant range
+  const region_t region = get_region(process, selection);
+  data = trim_hist(data, region.xmin_, region.xmax_); // restrict to the relevant range
   RooDataHist* data_hist = new RooDataHist("data_obs", "Data histograms", obs, data);
   return data_hist;
 }
@@ -385,7 +385,6 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
       pdf->SetName(Form("%s_pdf", name));
     }
   } else {
-
     RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.); x0->setConstant(true);
     RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
     RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
@@ -397,6 +396,7 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
                                  lambda->GetName(), obs.GetName()),
                             RooArgList(obs, *x0, *alpha, *beta, *lambda));
 
+    if((selection / 4000) > 0) x0->setVal(94.);
     if(freeze) {
       x0->setConstant(true);
       alpha->setConstant(true);
@@ -427,23 +427,21 @@ pdf_info get_rmc_int_model(RooRealVar& obs, TString process, int selection, cons
     if(knockout == "1n") {
       pdf = create_gaus_poly_pdf(obs, -1, name);
       // pdf = create_exponential(obs, 1, name);
-      pdf->SetName(Form("%s_pdf", name));
     } else {
       pdf = create_gaus_poly_pdf(obs, 1, name);
-      pdf->SetName(Form("%s_pdf", name));
     }
   } else {
-
     RooRealVar* x0     = new RooRealVar(Form("%s_x0", name), "Low Threshold Edge", 96.0, 80., 96.);
     RooRealVar* alpha  = new RooRealVar(Form("%s_alpha", name), "Low-edge turn-on power", 1.915, 0.1, 4.0);
     RooRealVar* beta   = new RooRealVar(Form("%s_beta", name), "Bulk curvature power", 0.457, 0.01, 20.0);
     RooRealVar* lambda = new RooRealVar(Form("%s_lambda", name), "Tail exponential decay", 1.932, 0.01, 5.0);
     pdf = new RooGenericPdf(Form("%s_pdf", name), "Gamma-Poly Hybrid",
-                                 Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
-                                      obs.GetName(), x0->GetName(), alpha->GetName(),
-                                      obs.GetName(), beta->GetName(),
-                                      lambda->GetName(), obs.GetName()),
-                                 RooArgList(obs, *x0, *alpha, *beta, *lambda));
+                            Form("(pow(max(0., %s - %s), %s) * pow(120.0 - %s, %s) * exp(-%s * %s))",
+                                 obs.GetName(), x0->GetName(), alpha->GetName(),
+                                 obs.GetName(), beta->GetName(),
+                                 lambda->GetName(), obs.GetName()),
+                            RooArgList(obs, *x0, *alpha, *beta, *lambda));
+    if((selection / 4000) > 0) x0->setVal(94.);
     if(freeze) {
       x0->setConstant(true);
       alpha->setConstant(true);
@@ -451,6 +449,7 @@ pdf_info get_rmc_int_model(RooRealVar& obs, TString process, int selection, cons
       lambda->setConstant(true);
     }
   }
+  pdf->SetName(Form("%s_pdf", name));
 
 
   res.pdf_   = pdf;
@@ -470,7 +469,10 @@ pdf_infos get_background_model(RooRealVar& obs, TString process, const int selec
 
   pdf_infos pdfs;
   const bool is_mumem = process == "mumem";
-  if(is_mumem)
+  // The backgrounds follow the charge of the selected tracks: DIO only gives e- tracks, and
+  // both RMC sources are modeled in a charge-inverted control region, which exists to constrain them
+  const region_t region = get_region(process, selection);
+  if(region.negative_tracks_)
     pdfs.push_back(read_model("dio", process, selection, tag));
   pdfs.push_back(read_model("cosmic", process, selection, tag));
   pdfs.push_back(read_model("rpc_ext", process, selection, tag));
@@ -481,7 +483,7 @@ pdf_infos get_background_model(RooRealVar& obs, TString process, const int selec
     for(const auto& comp : rmc_components(process, "rmc_ext")) {
       pdfs.push_back(read_model(comp, process, selection, tag));
     }
-    if(!is_mumem) {
+    if(!is_mumem || region.charge_inverted_) {
       for(const auto& comp : rmc_components(process, "rmc_int")) {
         pdfs.push_back(read_model(comp, process, selection, tag));
       }

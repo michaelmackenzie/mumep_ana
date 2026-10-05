@@ -9,6 +9,10 @@ Help() {
     echo "  -p, --process <name>         Process name (default: mumem)"
     echo "  -s, --selections <list>      Selection list, quoted (default: \"20\")"
     echo "  -t, --tag <tag>              Optional output tag"
+    echo "  -c, --control-regions <list> Control region set offsets added as extra channels to each"
+    echo "                               selection, quoted (default: none). Offsets are sums of the flags"
+    echo "                               1000 (inverted CRV veto), 2000 (inverted time cut, early time"
+    echo "                               for set 75), and 4000 (charge-inverted), e.g. \"1000 2000 4000\""
     echo "      --skip-fits              Skip per-selection fit stage"
     echo "      --skip-model             Skip model-building stage"
     echo "      --skip-cards             Skip datacard merge stage"
@@ -30,6 +34,7 @@ Help() {
 PROCESS=""
 SELECTIONS=""
 TAG=""
+CONTROLREGIONS=""
 SKIPFITS=""
 SKIPMODEL=""
 SKIPCARDS=""
@@ -55,6 +60,10 @@ if [[ $# -gt 0 ]] && [[ "${1}" == -* ]]; then
                 ;;
             -t|--tag)
                 TAG="${2:-}"
+                shift 2
+                ;;
+            -c|--control-regions)
+                CONTROLREGIONS="${2:-}"
                 shift 2
                 ;;
             --skip-fits)
@@ -110,10 +119,16 @@ if [[ "${SELECTIONS}" == "" ]]; then
     SELECTIONS="20"
 fi
 
-MERGECARD="datacards/combine_total_${PROCESS}"
-declare -a MERGELIST=()
-declare -a MERGELISTCC=()
-for SELECTION in ${SELECTIONS}; do
+for OFFSET in ${CONTROLREGIONS}; do
+    if ! [[ "${OFFSET}" =~ ^[1-7]000$ ]]; then
+        echo "Control region offset ${OFFSET} is not a sum of the flags 1000, 2000, and 4000"
+        exit 1
+    fi
+done
+
+# Fit the components and build the model and cards of one selection set
+build_set() {
+    local set=$1
     if [[ "${SKIPFITS}" == "" ]]; then
         [[ "${FIT_PDF_TYPE:-}" != "" ]] && export FIT_PDF_TYPE
         [[ "${FIT_TAIL_MODEL:-}" != "" ]] && export FIT_TAIL_MODEL
@@ -126,18 +141,42 @@ for SELECTION in ${SELECTIONS}; do
             var="FIT_SHAPE_SETS_${comp}";    [[ "${!var:-}" != "" ]] && export "$var"
             var="FIT_CONTROL_SETS_${comp}";  [[ "${!var:-}" != "" ]] && export "$var"
         done
-        ./perform_fits.sh "${PROCESS}" "${SELECTION}" "${TAG}" "${EVTANA}" "${NOSYS}"
+        ./perform_fits.sh "${PROCESS}" "${set}" "${TAG}" "${EVTANA}" "${NOSYS}"
     fi
     if [[ "${SKIPMODEL}" == "" ]]; then
-        root.exe -q -b "build_model.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\")"
+        root.exe -q -b "build_model.C(\"${PROCESS}\", ${set}, \"${TAG}\")"
     fi
-    CARD="combine_${PROCESS}_${SELECTION}"
+}
+
+# Card of one selection set, as written by build_model
+card_name() {
+    local card="combine_${PROCESS}_$1"
     if [[ "${TAG}" != "" ]]; then
-        CARD="${CARD}_${TAG}"
+        card="${card}_${TAG}"
     fi
-    MERGELIST+=("set_${SELECTION}=datacards/${CARD}.txt")
-    MERGELISTCC+=("set_${SELECTION}=datacards/${CARD}_cc.txt")
+    echo "datacards/${card}"
+}
+
+MERGECARD="datacards/combine_total_${PROCESS}"
+declare -a MERGELIST=()
+declare -a MERGELISTCC=()
+for SELECTION in ${SELECTIONS}; do
+    build_set "${SELECTION}"
+    CARD=$(card_name "${SELECTION}")
+    MERGELIST+=("set_${SELECTION}=${CARD}.txt")
+    MERGELISTCC+=("set_${SELECTION}=${CARD}_cc.txt")
     MERGECARD="${MERGECARD}_${SELECTION}"
+    # Control regions enter as extra channels, sharing the process names and nuisances
+    for OFFSET in ${CONTROLREGIONS}; do
+        CRSET=$((SELECTION + OFFSET))
+        build_set "${CRSET}"
+        CARD=$(card_name "${CRSET}")
+        MERGELIST+=("cr${OFFSET}_${SELECTION}=${CARD}.txt")
+        MERGELISTCC+=("cr${OFFSET}_${SELECTION}=${CARD}_cc.txt")
+    done
+done
+for OFFSET in ${CONTROLREGIONS}; do
+    MERGECARD="${MERGECARD}_cr${OFFSET}"
 done
 if [[ "${TAG}" != "" ]]; then
     MERGECARD="${MERGECARD}_${TAG}"

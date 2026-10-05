@@ -96,6 +96,29 @@ Component fits can merge shape inputs from multiple control-region sets.
 
 If not provided, `cosmic_fit` defaults to `{selection + 1000}`.
 
+## Combine Control Regions
+
+Unlike the set lists above, which only feed the component shape fits, a Combine control region is
+an extra channel in the merged card. Its processes and nuisances (`rmcN`, `lumi`, ...) share
+names with the signal region, so the control region constrains them in the joint fit.
+
+- `./full_loop.sh ... --control-regions "1000 2000 4000"` adds, for each selection `S` and offset
+  `O`, the channel `crO_S` built from set `S + O`. The offsets are the region flags of
+  `Mu2eEvtAna/src/ConvAna.cc`, and they combine (e.g. 3000 is CRV-tagged and time-inverted):
+  - 1000: inverted CRV veto (CRV-tagged tracks), mainly constraining cosmics (`csmN`)
+  - 2000: inverted time cut; for set 75 the early time region (t0 <= 540 ns), for sets 20/40
+    t0 outside 475-1650 ns, mainly constraining the prompt backgrounds (`rpcN`, `pbrN`)
+  - 4000: charge-inverted tracks (e+ for `mumem`, e- for `mumep`), constraining RMC
+- `regions.C` defines the regions. The CRV-tagged and time-inverted regions keep the signal
+  region's model, including the signal that leaks into them. A charge-inverted region has no
+  signal, gets DIO only for e- tracks, and always models both RMC sources; `perform_fits.sh`
+  skips the signal and systematics fits there.
+- The cosmic shape fit adds the CRV-tagged version of a set (`S + 1000`) to its input unless the
+  set already is CRV-tagged.
+- 2D (p, t0) fits are not available for time-inverted regions.
+- The momentum windows are set separately per process in `defaults.C`: `xmin_ci_em_`/`xmax_ci_em_`
+  (mumem control region) and `xmin_ci_ep_`/`xmax_ci_ep_` (mumep control region).
+
 ## Driver Script Configuration
 
 `perform_fits.sh` and `full_loop.sh` support environment overrides:

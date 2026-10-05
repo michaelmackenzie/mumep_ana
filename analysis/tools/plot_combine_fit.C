@@ -241,6 +241,10 @@ int print_stack(vector<TDirectoryFile*> dirs, TString tag, TString outdir) {
   TH1* hsignal             = get_hist(dirs, "total_signal");
   TH1* htotal              = get_hist(dirs, "total");
   TGraphAsymmErrors* gdata = get_data(dirs);
+  if(!hsignal && hbackground) { // a control region has no signal
+    hsignal = (TH1*) hbackground->Clone(Form("total_signal_%s", tag.Data()));
+    hsignal->Reset();
+  }
   if(!hsignal || !hbackground || !htotal || !gdata) {
     cout << "Data not found for tag " << tag.Data() << endl;
     return 1;
@@ -251,29 +255,26 @@ int print_stack(vector<TDirectoryFile*> dirs, TString tag, TString outdir) {
   vector<TString> names ;
   vector<TString> titles;
   vector<int>     colors;
-  if(is_mumem_) {
-    names  = {"pbar"      , "rpc_ext"     , "rpc_int"     , "cosmic"    , "dio"};
-    titles = {"Antiproton", "External RPC", "Internal RPC", "Cosmic ray", "DIO"};
-    colors = {kGreen-6    , kMagenta-10   , kMagenta+1    , kOrange     , kRed-7};
-  } else {
-    names  = {"pbar"      , "rpc_ext"     , "rpc_int"     , "cosmic"    };
-    titles = {"Antiproton", "External RPC", "Internal RPC", "Cosmic ray"};
-    colors = {kGreen-6    , kMagenta-10   , kMagenta+1    , kOrange     };
-    // The remaining components depend on how the model was built: RMC is split by neutron
-    // knockout (0n/1n) for mumep and is a single component per source otherwise, and an
-    // envelope model replaces every background it absorbed with a single data-driven shape.
-    // Only add what the fit output actually contains.
+  names  = {"pbar"      , "rpc_ext"     , "rpc_int"     , "cosmic"    };
+  titles = {"Antiproton", "External RPC", "Internal RPC", "Cosmic ray"};
+  colors = {kGreen-6    , kMagenta-10   , kMagenta+1    , kOrange     };
+  {
+    // The remaining components depend on the channel and how the model was built: DIO only
+    // contributes e- tracks (mu- --> e- signal region, mu- --> e+ charge-inverted control region),
+    // RMC is split by neutron knockout (0n/1n) for mumep and is a single component per source
+    // otherwise, and an envelope model replaces every background it absorbed with a single
+    // data-driven shape. Only add what the fit output actually contains.
     auto has_hist = [&](const char* name) {
       for(auto dir : dirs) if(!dir->Get(name)) return false;
       return true;
     };
-    const vector<TString> opt_names  = {"rmc_ext"       , "rmc_ext_0n"       , "rmc_ext_1n"       ,
+    const vector<TString> opt_names  = {"dio"   , "rmc_ext"       , "rmc_ext_0n"       , "rmc_ext_1n"       ,
                                         "rmc_int"       , "rmc_int_0n"       , "rmc_int_1n"       ,
                                         "env"                 };
-    const vector<TString> opt_titles = {"RMC (external)", "RMC 0n (external)", "RMC 1n (external)",
+    const vector<TString> opt_titles = {"DIO"   , "RMC (external)", "RMC 0n (external)", "RMC 1n (external)",
                                         "RMC (internal)", "RMC 0n (internal)", "RMC 1n (internal)",
                                         "Background envelope" };
-    const vector<int>     opt_colors = {kAtlantic+2     , kAtlantic+2        , kAtlantic+3        ,
+    const vector<int>     opt_colors = {kRed-7  , kAtlantic+2     , kAtlantic+2        , kAtlantic+3        ,
                                         kAtlantic       , kAtlantic          , kAtlantic+1        ,
                                         kGray+2               };
     for(unsigned i = 0; i < opt_names.size(); ++i) {
@@ -588,6 +589,10 @@ int print_hist(vector<TDirectoryFile*> dirs, TString tag, TString outdir) {
   TH1* hsignal             = get_hist(dirs, "total_signal");
   TH1* htotal              = get_hist(dirs, "total");
   TGraphAsymmErrors* gdata = get_data(dirs);
+  if(!hsignal && hbackground) { // a control region has no signal
+    hsignal = (TH1*) hbackground->Clone(Form("total_signal_%s", tag.Data()));
+    hsignal->Reset();
+  }
   if(!hsignal || !hbackground || !htotal || !gdata) {
     cout << "Data not found for tag " << tag.Data() << endl;
     return 1;

@@ -215,19 +215,19 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
 
   TCanvas* c = new TCanvas("c_model", "c_model", 1200, 1000);
   auto frame = obs.frame();
-  frame->SetTitle(Form("%s model", signal_model.title_.Data()));
+  frame->SetTitle(Form("%s model", (signal_model.pdf_) ? signal_model.title_.Data() : "Control region"));
   frame->SetXTitle("Momentum (MeV/c)");
 
   // data the data
   gStyle->SetEndErrorSize(0);
   data->plotOn(frame, RooFit::Name("data"), RooFit::XErrorSize(0), RooFit::LineWidth(2));
 
-  // draw the signal
+  // draw the signal, if modeled in this region
   auto sig_pdf = signal_model.pdf_;
-  sig_pdf->plotOn(frame, RooFit::Name(signal_model.name_),
-                  RooFit::LineColor(signal_model.color_), RooFit::FillColor(signal_model.color_),
-                  RooFit::FillStyle(3005),
-                  RooFit::Normalization(signal_scale*signal_model.rate_, RooAbsReal::NumEvent));
+  if(sig_pdf) sig_pdf->plotOn(frame, RooFit::Name(signal_model.name_),
+                              RooFit::LineColor(signal_model.color_), RooFit::FillColor(signal_model.color_),
+                              RooFit::FillStyle(3005),
+                              RooFit::Normalization(signal_scale*signal_model.rate_, RooAbsReal::NumEvent));
 
   // draw the backgrounds
   RooArgList bkg_pdfs;
@@ -262,7 +262,7 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
   leg->SetNColumns(3); leg->SetLineWidth(0); leg->SetFillColor(0); leg->SetLineColor(0); leg->SetFillStyle(0);
   leg->SetTextFont(132);
   leg->SetTextSize(0.055);
-  leg->AddEntry(signal_model.name_, "Signal", "L");
+  if(sig_pdf) leg->AddEntry(signal_model.name_, "Signal", "L");
   for(auto& bkg : background_model) leg->AddEntry(bkg.name_, bkg.title_, "L");
   leg->Draw();
 
@@ -289,13 +289,14 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
   leg->SetTextFont(132);
   leg->SetTextSize(0.043);
 
-  auto h_sig = signal_model.pdf_->createHistogram("h_sig", obs);
+  // without a signal model, an empty histogram still sets up the axes
+  auto h_sig = (sig_pdf) ? sig_pdf->createHistogram("h_sig", obs) : obs.createHistogram("h_sig");
   h_sig->Scale(signal_model.rate_);
   h_sig->SetLineColor(signal_model.color_);
   h_sig->SetLineWidth(2);
   h_sig->SetFillStyle(0);
   h_sig->SetFillColor(signal_model.color_);
-  leg->AddEntry(h_sig, signal_model.title_, "L");
+  if(sig_pdf) leg->AddEntry(h_sig, signal_model.title_, "L");
 
   vector<TH1*> bkg_hs;
   for(auto& bkg : background_model) {
@@ -358,8 +359,9 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   do_knockouts_ = true;
 
   // Create the observable
-  const bool is_mumem = process == "mumem";
-  const float xmin(is_mumem ? xmin_em_ : xmin_ep_), xmax(is_mumem ? xmax_em_ : xmax_ep_);
+  const region_t region = get_region(process, selection);
+  const bool has_signal = region.has_signal_; // a charge-inverted control region has no signal
+  const float xmin(region.xmin_), xmax(region.xmax_);
   RooRealVar obs(Form("obs_%i", selection), "p", (xmin+xmax)/2., xmin, xmax, "MeV/c");
   const int nbins = (bin_width_ > 0.) ? (xmax - xmin)/bin_width_ + 1.e-6 : 100;
   // cout << "----- nbins = " << nbins << endl;
@@ -371,7 +373,8 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   TString figdir = Form("figures/%s%s", process.Data(), (tag != "") ? ("_"+tag).Data() : "");
 
   // Retrieve the signal data
-  auto signal_model     = read_model          ("signal", process, selection, tag);
+  pdf_info signal_model;
+  if(has_signal) signal_model = read_model    ("signal", process, selection, tag);
   auto background_model = get_background_model(obs     , process, selection, tag);
   RooAbsData* data      = get_data            (obs     , process, selection, tag);
 
@@ -383,6 +386,15 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   // floating parameter instead of an observable, so the fit is really a 1D slice at one t0.
   // The input histogram files only provide 1D momentum and t0 distributions for data, so a
   // 2D fit to real data cannot be built yet; the pseudo-data is generated in 2D below.
+  if(do_2d_fit_ && !has_signal) {
+    cout << __func__ << ": 2D fits are not implemented for control regions without signal." << endl;
+    return 1;
+  }
+  if(do_2d_fit_ && region.time_inverted_) {
+    cout << __func__ << ": 2D fits are not implemented for time-inverted control regions,"
+         << " their tracks fall outside the t0 range of the fit." << endl;
+    return 1;
+  }
   if(do_2d_fit_ && data) {
     cout << __func__ << ": 2D fits to real data need a 2D (obs, t0) data histogram, which the inputs do not provide."
          << " Use pseudo-data (no data tag) or a 1D fit." << endl;
@@ -391,7 +403,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   auto sig_pdf = signal_model.pdf_;
 
-  if(!sig_pdf || background_model.empty()) {
+  if((has_signal && !sig_pdf) || background_model.empty()) {
     cout << "Model PDFs not found!\n";
     return 1;
   }
@@ -441,7 +453,11 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   double p_blind_min = 90.;
   double p_blind_max = 93.;
   envelope_t envelope;
-  if(use_env_ && process == "mumep") {
+  // The envelope absorbs every background, so it is only used in the signal region: a control
+  // region is there to constrain individually modeled backgrounds
+  if(use_env_ && process == "mumep" && region.is_control()) {
+    cout << __func__ << ": Not using the background envelope in control region " << selection << endl;
+  } else if(use_env_ && process == "mumep") {
     auto data_hist = dynamic_cast<RooDataHist*>(data);
     if(!data_hist) {
       cout << __func__ << ": The background envelope requires binned data (unbinned_ = false)!\n";
@@ -501,10 +517,12 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   TFile* fcomp = new TFile(comp_file, "RECREATE");
   auto comp_dir = fcomp->mkdir("category");
   comp_dir->cd();
-  TH1* hsig_comp = (TH1*) signal_model.hist_->Clone("signal");
-  hsig_comp->SetTitle(signal_model.title_);
-  hsig_comp->Scale(signal_model.rate_ / hsig_comp->Integral());
-  hsig_comp->Write();
+  if(has_signal) {
+    TH1* hsig_comp = (TH1*) signal_model.hist_->Clone("signal");
+    hsig_comp->SetTitle(signal_model.title_);
+    hsig_comp->Scale(signal_model.rate_ / hsig_comp->Integral());
+    hsig_comp->Write();
+  }
   for(auto& bkg : background_model) {
     TH1* hbkg_comp = (TH1*) bkg.hist_->Clone(bkg.name_);
     hbkg_comp->Scale(bkg.rate_ / hbkg_comp->Integral());
@@ -606,8 +624,10 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     ws.import(*signal_model.norm_);
     for(auto& bkg : background_model) ws.import(*bkg.norm_);
   } else {
-    ws.import(*sig_pdf); ws.import(*signal_model.norm_);
-    signal_model.hist_->Write();
+    if(has_signal) {
+      ws.import(*sig_pdf); ws.import(*signal_model.norm_);
+      signal_model.hist_->Write();
+    }
     for(auto& bkg : background_model) {
       ws.import(*bkg.pdf_); ws.import(*bkg.norm_);
       bkg.hist_->Write();
@@ -670,7 +690,8 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   }
 
   // The MC-modeled processes; the data-driven envelope takes no systematic uncertainties
-  std::vector<pdf_info> mc_infos = {signal_model};
+  std::vector<pdf_info> mc_infos;
+  if(has_signal) mc_infos.push_back(signal_model);
   for(auto& bkg : background_model) {
     if(!envelope.pdf_ || bkg.pdf_ != envelope.pdf_) mc_infos.push_back(bkg);
   }
@@ -706,8 +727,10 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   ws.import(livetime);
   RooRealVar nmuons("nmuons", "nmuons", nmuons_);
   ws.import(nmuons);
-  RooRealVar sig_eff("signal_eff", "signal efficiency", signal_model.rate_ / n_signal_exp);
-  ws.import(sig_eff);
+  if(has_signal) {
+    RooRealVar sig_eff("signal_eff", "signal efficiency", signal_model.rate_ / n_signal_exp);
+    ws.import(sig_eff);
+  }
   fout->cd();
   ws.Write();
   fout->Close();
@@ -716,7 +739,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   if(write_card_) {
     // construct the card info list
     std::vector<card_info_t> card_info;
-    card_info.push_back(card_info_t(signal_model.name_, signal_model.rate_, selection));
+    if(has_signal) card_info.push_back(card_info_t(signal_model.name_, signal_model.rate_, selection));
     for(auto& bkg : background_model) {
       const bool floating = envelope.pdf_ && bkg.pdf_ == envelope.pdf_;
       card_info.push_back(card_info_t(bkg.name_, bkg.rate_, selection, floating));
@@ -732,8 +755,11 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
   // Create a cut-and-count selection to go along with this selection
   {
-    TH1* sig_hist = sig_pdf->createHistogram("sig_hist", obs);
-    sig_hist->Scale(signal_model.rate_ / sig_hist->Integral());
+    // a control region counts over the full fit range, keeping all the events that constrain the
+    // backgrounds; the signal region counts in the window maximizing S/sqrt(S+B)
+    const bool optimize_window = has_signal && !region.is_control();
+    TH1* sig_hist = (has_signal) ? sig_pdf->createHistogram("sig_hist", obs) : obs.createHistogram("sig_hist");
+    if(has_signal) sig_hist->Scale(signal_model.rate_ / sig_hist->Integral());
     TH1* bkg_hist = (TH1*) sig_hist->Clone("bkg_hist");
     bkg_hist->Reset();
     vector<TH1*> bkg_hists;
@@ -745,9 +771,9 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     }
     // Determine the "best" observable region
     const int nbins = sig_hist->GetNbinsX();
-    int best_low(1), best_high(1);
+    int best_low(1), best_high((optimize_window) ? 1 : nbins);
     double best_value = -1.;
-    for(int bin_low = 1; bin_low <= nbins; ++bin_low) {
+    for(int bin_low = 1; optimize_window && bin_low <= nbins; ++bin_low) {
       for(int bin_high = bin_low; bin_high <= nbins; ++bin_high) {
         const double nsig = sig_hist->Integral(bin_low, bin_high);
         const double nbkg = bkg_hist->Integral(bin_low, bin_high);
@@ -781,7 +807,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
     // construct the card info list
     std::vector<card_info_t> card_info;
-    card_info.push_back(card_info_t(signal_model.name_, nsig, selection));
+    if(has_signal) card_info.push_back(card_info_t(signal_model.name_, nsig, selection));
     for(size_t index = 0; index < background_model.size(); ++index) {
       const auto& bkg = background_model[index];
       const double nbkg_i  = bkg_hists[index]->Integral(best_low, best_high);
@@ -800,7 +826,8 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   printf("N(POT)   = %.1e\n", npot_);
   printf("Livetime = %.1e s\n", livetime_);
   printf("N(muons) = %.1e\n", nmuons_);
-  printf("%-10s (%-20s): Rate = %.4f\n", signal_model.name_.Data(), signal_model.title_.Data(), signal_model.rate_);
+  if(has_signal)
+    printf("%-10s (%-20s): Rate = %.4f\n", signal_model.name_.Data(), signal_model.title_.Data(), signal_model.rate_);
   for(auto& bkg : background_model)
     printf("%-10s (%-20s): Rate = %.4f\n", bkg.name_.Data(), bkg.title_.Data(), bkg.rate_);
   printf("----------------------------------------------\n");

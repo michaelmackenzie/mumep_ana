@@ -180,7 +180,7 @@ RooGenericPdf* create_gaus_poly_pdf(RooRealVar& obs, int order, TString name) {
   //add the Gaussian parameters
   vars.push_back(new RooRealVar(Form("%s_gaus_poly_order_%i_g_0", name.Data(), order),
                                 Form("%s_gaus_poly_order_%i_g_0", name.Data(), order),
-                                53., 30., 90.)); //mean
+                                75., 30., 90.)); //mean
   vars.push_back(new RooRealVar(Form("%s_gaus_poly_order_%i_g_1", name.Data(), order),
                                 Form("%s_gaus_poly_order_%i_g_1", name.Data(), order),
                                 12., 5., 20.)); //sigma
