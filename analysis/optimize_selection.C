@@ -1,8 +1,8 @@
 // Optimize the event selection
 
-#include "../defaults.C"
-#include "../physics.C"
-#include "../datasets.C"
+#include "defaults.C"
+#include "physics.C"
+#include "datasets.C"
 
 int debug_level_ = 0;
 
@@ -400,7 +400,7 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
   vars.push_back(Var_t("trk_fitcon"    ,   0.,    1., kLeft)); // only cut low track quality
   vars.push_back(Var_t("trk_qual"      ,  -1.,    1., kLeft)); // only cut on low scores for MVA ID scores
   vars.push_back(Var_t("trk_pid"       ,  -1.,    1., kLeft));
-  vars.push_back(Var_t("trk_trkonlypid",  -1.,    1., kLeft));
+  if(!mumem) vars.push_back(Var_t("trk_trkonlypid",  -1.,    1., kLeft));
   // vars.push_back(Var_t("trk_csmid"     ,  -1.,    1., kLeft));
 
   // Validate the variables
@@ -421,7 +421,8 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
          n_sig_0, n_bkg_0, sig_0);
 
   // File to output results into
-  TString f_out = "cut_strings.txt";
+  TString tag = (mumem) ? "mumem" : "mumep";
+  TString f_out = "cut_strings_" + tag + ".txt";
   gSystem->Exec(Form("[ -f %s ] && rm %s; touch %s",
                      f_out.Data(), f_out.Data(), f_out.Data()));
 
@@ -501,7 +502,7 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
   leg.AddEntry(&points, "Background rejection", "L");
   leg.AddEntry(&sigs  , "Significance", "L");
   leg.Draw();
-  c.SaveAs("roc.png");
+  c.SaveAs("roc_" + tag + ".png");
 
   gStyle->SetOptStat(0);
   TH1* haxis = new TH1F("haxis","",1,0.,1.1);
@@ -518,7 +519,7 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
   leg_p.AddEntry(&points    , "Greedy selection", "L");
   leg_p.AddEntry(grid_points, "Random selection", "P");
   leg_p.Draw();
-  c.SaveAs("roc_grid.png");
+  c.SaveAs("roc_grid_ " + tag + ".png");
 
   return 0;
 }

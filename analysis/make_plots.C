@@ -119,7 +119,7 @@ int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dat
     }
     if(mds)  signal_br_ = base_br;
     plotter_->update_signal_br(signal_br_);
-    double p_min((mumem) ? (mds && set < 20) ? 95. : 100. : 87.), p_max((mumem) ? 110. : 97.);
+    double p_min((mumem) ? (mds && set < 20) ? 95. : 95. : 87.), p_max((mumem) ? 110. : 97.);
     if(use_evtana_ && set == 60) {p_min = 97.; p_max = 110.;}
     if(set < 10)       plotter_->use_offsets_ = false; //if using control region offsets
     else if(set == 30) plotter_->use_offsets_ = false;
@@ -152,6 +152,8 @@ int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dat
       // c = plotter_->print_stack(plot_t("clusterDisk"    , "trk", set, 0, 1.  ,  -1. , 1., -1., logy, false, "Cluster disk", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("dt"             , "trk", set, 2, -10.,  5.  , 1., -1., logy, false, "#Deltat", "ns")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("nActive"        , "trk", set, 1,   1.,  -1. , 1., -1., logy, false, "N(active hits)", "")); if(!c) ++status; else Empty_Canvas(c);
+      c = plotter_->print_stack(plot_t("t0err"          , "trk", set, 1,   0.2,  0.8, 1., -1., logy, false, "#sigma(t_{0})", "ns")); if(!c) ++status; else Empty_Canvas(c);
+      c = plotter_->print_stack(plot_t("fitMomErr"      , "trk", set, 1,   0.,   1. , 1., -1., logy, false, "#sigma(p)", "MeV/c")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("tzslopesig"     , "trk", set, 2, -10.,  10. , 1., -1., logy, false, "TZ slope / #sigma", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("tzsloperatio"   , "trk", set, 2,  -5.,   5. , 1., -1., logy, false, "TZ slope / expected", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("pST_diff"       , "trk", set, 2, 0., 5.     , 1., -1., logy, false, "#Deltap(ST)", "MeV/c")); if(!c) ++status; else Empty_Canvas(c);

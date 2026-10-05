@@ -75,12 +75,16 @@ TLatex* Mu2e_lumi(const bool is_data, const double npot = -1., const double live
   const bool  is_1bb = (npot > 0. && livetime > 0. && npot/livetime < 2.e13);
   const float duty_cycle = (is_1bb) ? 0.323 : 0.246;
   const float period = (is_1bb) ? 1.33 : 1.4;
+  const float time_running = livetime/duty_cycle;
+  const float days_running = time_running / 60. / 60. / 24.;
+  const float years_running = days_running / 365.;
   float power = (npot > 0. && livetime > 0.) ? energy * (npot / (livetime/duty_cycle))/1000. : 0.; // in kW
   // hack to round the power
-  if(std::fabs(power - 3.84) < 0.2) power = 3.84;
-  TString lumistamp = Form("%.3g kW beam; %.1f x 10^{%i} s On-Spill; %.1f x 10^{%i} muon stops",
+  // if(std::fabs(power - 3.84) < 0.2) power = 3.84;
+  TString lumistamp = Form("%.3g kW beam; %.0f %s running; %.1f x 10^{%i} muon stops",
                            power,
-                           head_time, ntens_time,
+                           (years_running > 1.) ? years_running : days_running,
+                           (years_running > 1.) ? "years" : "days",
                            head_muons, ntens_muons);
 
   float textSize = 0.042 * 1.25 * scale;

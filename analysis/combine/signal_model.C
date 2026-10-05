@@ -44,7 +44,7 @@ pdf_info get_signal_model(RooRealVar& obs, const TString process, const int sele
   if(!use_hist) {
     delete h; //no longer needed
 
-    const int fit_version = 1; // 0: CB * Landau; 1: Landau CB; 2: CB; 3: Voigtian; 4: Cruijff
+    const int fit_version = 2; // 0: CB * Landau; 1: Landau CB; 2: CB; 3: Voigtian; 4: Cruijff
     const float signal_peak = (is_mumem) ? 104.0f : 92.3f;
     RooRealVar*    es_nuis      = new RooRealVar   (Form("%s_%i_es"  , process.Data(), selection), "Energy scale nuisance", 0., -7., 7.); es_nuis->setConstant(true);
     RooRealVar*    sig_mean_nom = new RooRealVar   (Form("%s_sig_mean_nom", name), "mean", signal_peak-1., signal_peak - 5., signal_peak + 5.);
