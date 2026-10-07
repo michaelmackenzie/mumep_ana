@@ -361,7 +361,8 @@ int save_fit_workspace(TString process,
                        TH1* t0_raw_hist = nullptr,
                        TH1* t0_normalized_hist = nullptr,
                        TH1* t0_smoothed_hist = nullptr,
-                       const TString out_suffix = "") {
+                       const TString out_suffix = "",
+                       const bool mc_template = false) {
   const char* hist_name = Form("%s_%i_%s_hist", process.Data(), selection, component.Data());
   auto h_fit = pdf->createHistogram(hist_name, obs);
   h_fit->SetName(hist_name);
@@ -400,6 +401,11 @@ int save_fit_workspace(TString process,
 
   ws.import(*pdf);
   ws.import(norm);
+  // whether the PDF is the simulated histogram itself, i.e. not fit or smoothed
+  RooRealVar template_flag(Form("%s_%i_%s_mc_template", process.Data(), selection, component.Data()),
+                           "PDF is the MC histogram", (mc_template) ? 1. : 0.);
+  template_flag.setConstant(true);
+  ws.import(template_flag);
   write_hist_to_workspace(raw_hist,
                           Form("%s_%i_%s_raw_hist", process.Data(), selection, component.Data()),
                           Form("%s_%i_%s_raw_data_hist", process.Data(), selection, component.Data()),
@@ -447,7 +453,8 @@ int save_fit_workspace_with_hist(TString process,
                                  TH1* t0_raw_hist = nullptr,
                                  TH1* t0_normalized_hist = nullptr,
                                  TH1* t0_smoothed_hist = nullptr,
-                                 const TString out_suffix = "") {
+                                 const TString out_suffix = "",
+                                 const bool mc_template = false) {
   if(!pdf || !hist) return 1;
 
   const char* hist_name = Form("%s_%i_%s_hist", process.Data(), selection, component.Data());
@@ -490,6 +497,11 @@ int save_fit_workspace_with_hist(TString process,
 
   ws.import(*out_pdf);
   ws.import(norm);
+  // whether the PDF is the simulated histogram itself, i.e. not fit or smoothed
+  RooRealVar template_flag(Form("%s_%i_%s_mc_template", process.Data(), selection, component.Data()),
+                           "PDF is the MC histogram", (mc_template) ? 1. : 0.);
+  template_flag.setConstant(true);
+  ws.import(template_flag);
   write_hist_to_workspace(raw_hist,
                           Form("%s_%i_%s_raw_hist", process.Data(), selection, component.Data()),
                           Form("%s_%i_%s_raw_data_hist", process.Data(), selection, component.Data()),

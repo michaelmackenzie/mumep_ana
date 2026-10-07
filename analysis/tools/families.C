@@ -160,9 +160,18 @@ RooGenericPdf* create_inv_polynomial(RooRealVar& obs, int order, TString name) {
   return pdf;
 }
 
-//Create a Gaussian + polynomial(order = order) PDF
+//Create a broad Gaussian PDF: the falling tail of a wide Gaussian centered below the fit range.
+//A RooGaussian, so its normalization is analytic (fast compared to the RooGenericPdf families)
+RooGaussian* create_gaussian_pdf(RooRealVar& obs, TString name) {
+  auto mean  = new RooRealVar(Form("%s_gaus_mean" , name.Data()), Form("%s Gaussian mean" , name.Data()), 75., 30., 90.);
+  auto sigma = new RooRealVar(Form("%s_gaus_sigma", name.Data()), Form("%s Gaussian sigma", name.Data()), 12.,  5., 20.);
+  auto pdf = new RooGaussian(Form("%s_gaus_pdf", name.Data()), "Broad Gaussian PDF", obs, *mean, *sigma);
+  return pdf;
+}
+
+//Create a Gaussian + polynomial(order = order) PDF; a Gaussian alone is create_gaussian_pdf
 RooGenericPdf* create_gaus_poly_pdf(RooRealVar& obs, int order, TString name) {
-  if(order < -1) {
+  if(order < 0) {
     cout << __func__ << ": Can't create order " << order << " PDF!\n";
     return nullptr;
   }
@@ -171,8 +180,7 @@ RooGenericPdf* create_gaus_poly_pdf(RooRealVar& obs, int order, TString name) {
   var_list.add(obs);
   TString formula = "";
   //define the formula for fixed orders
-  if     (order == -1) formula = "TMath::Gaus(@0, @1, @2)";
-  else if(order ==  0) formula = "max(0., TMath::Gaus(@0, @1, @2) + @3)";
+  if     (order ==  0) formula = "max(0., TMath::Gaus(@0, @1, @2) + @3)";
   else if(order ==  1) formula = "max(0., TMath::Gaus(@0, @1, @2) + @3 + @4*@0/90)";
   else if(order ==  2) formula = "max(0., TMath::Gaus(@0, @1, @2) + @3 + @4*@0/90 + @5*@0*@0/90/90)";
   else if(order ==  3) formula = "max(0., TMath::Gaus(@0, @1, @2) + @3 + @4*@0/90 + @5*@0*@0/90/90 + @6*@0*@0*@0/90/90/90)";
@@ -275,6 +283,60 @@ RooGenericPdf* create_gaus_power_pdf(RooRealVar& obs, int order, TString name) {
   for(auto var : vars) var_list.add(*var);
   RooGenericPdf* pdf = new RooGenericPdf(Form("%s_gaus_power_pdf_order_%i", name.Data(), order), formula.Data(), var_list);
   pdf->SetTitle(Form("Gaussian power series PDF, order %i", order));
+  return pdf;
+}
+
+//Create an endpoint power law PDF, (E0 - x)^a times an order-n polynomial correction:
+//  order 0: (E0 - x)^a
+//  order n: (E0 - x)^a * (1 + c_1 t + ... + c_n t^n), t = (x - center)/half-width of the observable
+//A spectrum falling to a kinematic endpoint E0 above the fit range, e.g. the radiative muon
+//capture positrons that dominate the mu- --> e+ background (E0 ~ 100.5 MeV/c, a ~ 3 in set 40)
+RooGenericPdf* create_endpoint_pdf(RooRealVar& obs, int order, TString name) {
+  if(order < 0 || order > 3) {
+    cout << __func__ << ": Can't create order " << order << " PDF!\n";
+    return nullptr;
+  }
+  const double xmin(obs.getMin()), xmax(obs.getMax());
+  const double center(0.5*(xmin + xmax)), half_width(0.5*(xmax - xmin));
+  TString base = Form("%s_endpoint_order_%i", name.Data(), order);
+  RooArgList var_list(obs);
+  var_list.add(*(new RooRealVar(base + "_e0", base + " endpoint", xmax + 4.5, xmax + 0.1, xmax + 30.)));
+  var_list.add(*(new RooRealVar(base + "_a" , base + " power"   , 3., 0., 20.)));
+  TString formula = "TMath::Power(max(1.e-9, @1 - @0), @2)";
+  if(order > 0) {
+    formula += "*max(1.e-9, 1";
+    for(int i = 1; i <= order; ++i) {
+      var_list.add(*(new RooRealVar(Form("%s_c_%i", base.Data(), i), Form("%s c_%i", base.Data(), i), 0., -2., 2.)));
+      formula += Form(" + @%i*TMath::Power((@0 - %.6g)/%.6g, %i)", i + 2, center, half_width, i);
+    }
+    formula += ")";
+  }
+  RooGenericPdf* pdf = new RooGenericPdf(Form("%s_endpoint_pdf_order_%i", name.Data(), order), formula.Data(), var_list);
+  pdf->SetTitle(Form("Endpoint power law PDF, order %i", order));
+  return pdf;
+}
+
+//Create an exponential of a polynomial PDF, exp(c_1 t + ... + c_n t^n), t = (x - center)/half-width
+//of the observable. Order 1 is an exponential and order 2 a Gaussian (as create_gaussian_pdf);
+//order 3 adds an asymmetric correction to the falling slope
+RooGenericPdf* create_exp_poly_pdf(RooRealVar& obs, int order, TString name) {
+  if(order <= 0 || order > 5) {
+    cout << __func__ << ": Can't create order " << order << " PDF!\n";
+    return nullptr;
+  }
+  const double xmin(obs.getMin()), xmax(obs.getMax());
+  const double center(0.5*(xmin + xmax)), half_width(0.5*(xmax - xmin));
+  RooArgList var_list(obs);
+  TString formula = "TMath::Exp(";
+  for(int i = 1; i <= order; ++i) {
+    TString base = Form("%s_exp_poly_order_%i_c_%i", name.Data(), order, i);
+    // a falling start: a negative slope, the higher orders off
+    var_list.add(*(new RooRealVar(base, base, (i == 1) ? -1.5 : 0., -20., 20.)));
+    formula += Form("%s@%i*TMath::Power((@0 - %.6g)/%.6g, %i)", (i > 1) ? " + " : "", i, center, half_width, i);
+  }
+  formula += ")";
+  RooGenericPdf* pdf = new RooGenericPdf(Form("%s_exp_poly_pdf_order_%i", name.Data(), order), formula.Data(), var_list);
+  pdf->SetTitle(Form("Exponential polynomial PDF, order %i", order));
   return pdf;
 }
 

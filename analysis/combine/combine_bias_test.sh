@@ -84,11 +84,11 @@ if [[ ! -f "$TOYFILE" ]]; then
 fi
 
 echo "Generated toys saved in $TOYFILE"
-FIT_ARGS="$FIT_ARGS --cminDefaultMinimizerStrategy=0 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1 --rMin -500. --rMax 500."
+FIT_ARGS="$FIT_ARGS --cminDefaultMinimizerStrategy=1 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1 --rMin -800. --rMax 800."
 FIT_ARGS="$FIT_ARGS --cminRunAllDiscreteCombinations --X-rtd REMOVE_CONSTANT_ZERO_POINT=1"
 FIT_ARGS="$FIT_ARGS --X-rtd MINIMIZER_freezeDisassociatedParams"
 FIT_ARGS="$FIT_ARGS --X-rtd MINIMIZER_multiMin_hideConstants"
-combine -d "$CARD2" -M FitDiagnostics --toysFile="${TOYFILE}" $FIT_ARGS -n ".$TAG" -t "$TOYS" -s "$SEED" --saveWithUncertainties --saveNormalizations
+combine -d "$CARD2" -M FitDiagnostics --toysFile="${TOYFILE}" $FIT_ARGS -n ".$TAG" -t "$TOYS" -s "$SEED"
 
 FIT_RESULT_FILE="fitDiagnostics.$TAG.root"
 if [[ ! -f "$FIT_RESULT_FILE" ]]; then

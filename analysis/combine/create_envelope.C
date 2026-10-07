@@ -13,14 +13,18 @@ bool useFrameChiSq_         = false; //use a roo plot frame to evaluate chi^2
 bool useManualChisq_        = true ; //calcuate chi^2 values by hand with histograms
 bool useDataBinErrors_      = false; //use data bin errors when calculating chi^2
 
-bool use_exp_family_        = false; //exp(x)
-bool use_power_family_      = false; //x^p
+bool use_exp_family_        = true ; //exp(x)
+bool use_power_family_      = true ; //x^p
 bool use_laurent_family_    = false; //Laurent
 bool use_inv_poly_family_   = false; //1/(polynomial)
 bool use_poly_family_       = true ; //polynomial
+bool use_gaussian_family_   = true ; //broad Gaussian
 bool use_gaus_poly_family_  = true ; //Gaussian + polynomial
 bool use_gaus_expo_family_  = false; //Gaussian + exp(x)
 bool use_gaus_power_family_ = false; //Gaussian + x^p
+bool use_endpoint_family_   = true ; //(E0 - x)^a x (1 + polynomial), a spectrum falling to an endpoint above the range
+bool use_exp_poly_family_   = true ; //exp(polynomial)
+bool use_bernstein_family_  = false; //Bernstein polynomial (see use_generic/fast_bernstein_)
 bool use_generic_bernstein_ = false;
 bool use_fast_bernstein_    = false;
 
@@ -32,6 +36,7 @@ bool add_all_fits_          = false; //add all fits, even if they fail
 bool test_single_function_  = false; //only pass 1 function into the PDF ensemble
 
 double chisq_p_min_         = 0.001; //minimum p(chi^2, ndof) for a fit to be acceptable
+double env_penalty_factor_  = 0.5  ; //RooMultiPdf correction to the NLL per floating parameter (Combine's default)
 double ftest_p_max_         = 0.20 ; //maximum p(F) for a higher order to be considered an improvement
 
 RooAbsPdf* additional_bkg_  = nullptr; //if some background component is modeled separately
@@ -495,7 +500,7 @@ int plot_envelope_functions(RooRealVar& obs, RooDataHist& data, const std::vecto
   //Mark the blinded region left out of the fits
   auto draw_blind_box = [&](const double ymin, const double ymax) {
     TBox* box = new TBox(blind_min, ymin, blind_max, ymax);
-    box->SetFillColorAlpha(kGray+1, 0.25);
+    box->SetFillColorAlpha(kGray, 0.25);
     box->SetLineColor(kGray+2);
     box->SetLineStyle(kDashed);
     box->Draw("same");
@@ -521,7 +526,7 @@ int plot_envelope_functions(RooRealVar& obs, RooDataHist& data, const std::vecto
 
   TLegend* leg = new TLegend(0.14, 0.63, 0.96, 0.92);
   leg->SetNColumns(2);
-  leg->SetLineWidth(0); leg->SetFillStyle(0); leg->SetTextFont(42); leg->SetTextSize(0.035);
+  leg->SetLineWidth(0); leg->SetFillStyle(0); leg->SetTextFont(42); leg->SetTextSize(0.0335);
   leg->AddEntry(h_data, "Data (sidebands fit)", "PE");
   for(size_t ifit = 0; ifit < fits.size(); ++ifit) {
     leg->AddEntry(models[ifit], Form("%s: #chi^{2}_{#nu} = %.1f/%i", fits[ifit].label_.Data(),
@@ -589,15 +594,11 @@ int plot_envelope_functions(RooRealVar& obs, RooDataHist& data, const std::vecto
 RooMultiPdf* create_envelope(RooRealVar& obs, RooCategory& cat, RooDataHist& data, bool useSideBands, TString name,
                              std::vector<env_fit_t>& fits, const int verbose = 0) {
   RooArgList pdf_list;
-  std::pair<int, double> result(-1, 1.e10);
-  double chi_min = 1.e10;
-  int best_index = -1;
   fits.clear();
 
   auto consider = [&](pdf_creator_t create, TString label, int min_order, int max_order, int forced_order) {
-    result = add_family(data, obs, pdf_list, fits, useSideBands, name, verbose,
-                        create, label, min_order, max_order, forced_order);
-    if(result.second < chi_min) { chi_min = result.second; best_index = result.first; }
+    add_family(data, obs, pdf_list, fits, useSideBands, name, verbose,
+               create, label, min_order, max_order, forced_order);
   };
 
   if(use_poly_family_) {
@@ -623,29 +624,71 @@ RooMultiPdf* create_envelope(RooRealVar& obs, RooCategory& cat, RooDataHist& dat
              "Inverse poly", 1, 1, 1);
   if(use_gaus_poly_family_)
     consider([](RooRealVar& o, int n, TString s) -> RooAbsPdf* { return create_gaus_poly_pdf(o, n, s); },
-             "Gaussian poly", -1, 3, 1);
+             "Gaussian poly", 0, 3, 1);
   if(use_gaus_expo_family_)
     consider([](RooRealVar& o, int n, TString s) -> RooAbsPdf* { return create_gaus_expo_pdf(o, n, s); },
              "Gaussian expo", 1, 2, 1);
   if(use_gaus_power_family_)
     consider([](RooRealVar& o, int n, TString s) -> RooAbsPdf* { return create_gaus_power_pdf(o, n, s); },
              "Gaussian power", 1, 2, 1);
+  if(use_endpoint_family_)
+    consider([](RooRealVar& o, int n, TString s) -> RooAbsPdf* { return create_endpoint_pdf(o, n, s); },
+             "Endpoint power", 0, 2, 0);
+  if(use_exp_poly_family_)
+    consider([](RooRealVar& o, int n, TString s) -> RooAbsPdf* { return create_exp_poly_pdf(o, n, s); },
+             "Exponential poly", 1, 4, 3);
+  // exp(polynomial) order 2 is a Gaussian, so the broad Gaussian would repeat it in the envelope;
+  // it is only added when that order is not already there (family off, or the order not accepted)
+  if(use_gaussian_family_) {
+    bool has_exp_poly_2 = false;
+    for(auto& fit : fits) has_exp_poly_2 |= fit.label_ == "Exponential poly order 2";
+    if(has_exp_poly_2) {
+      if(verbose > 0) printf("%s: Not adding the broad Gaussian: exp(polynomial) order 2 is the same shape\n", __func__);
+    } else {
+      consider([](RooRealVar& o, int n, TString s) -> RooAbsPdf* { return create_gaussian_pdf(o, s); }, // a single function
+               "Broad Gaussian", 1, 1, 1);
+    }
+  }
+  if(use_bernstein_family_)
+    consider([](RooRealVar& o, int n, TString s) -> RooAbsPdf* {
+               if(use_generic_bernstein_) return create_generic_bernstein(o, n, s);
+               if(use_fast_bernstein_)    return create_fast_bernstein   (o, n, s);
+               return create_bernstein(o, n, s);
+             }, "Bernstein", 1, 4, 4);
 
   if(pdf_list.getSize() <= 0) {
     cout << __func__ << ": No PDFs were added to the envelope for " << name.Data() << endl;
     return nullptr;
   }
 
+  // The best function is the one Combine prefers on the fitted data: the lowest chi^2 (~ -2 ln L)
+  // plus the RooMultiPdf penalty, 2 x env_penalty_factor_ per floating parameter. The envelope starts
+  // at it, since Combine generates toys and Asimov data sets from the starting index.
+  int best_index = 0;
+  double best_score = 1.e30;
+  for(size_t ifit = 0; ifit < fits.size(); ++ifit) {
+    const double score = fits[ifit].chi_sq_ + 2.*env_penalty_factor_*fits[ifit].nparams_;
+    if(score < best_score) { best_score = score; best_index = ifit; }
+  }
+  if(verbose > 0 && !fits.empty()) {
+    printf("%s: Best function: [%i] %s, chi^2 = %.2f with %i parameters (chi^2 + penalty = %.2f)\n",
+           __func__, best_index, fits[best_index].label_.Data(), fits[best_index].chi_sq_,
+           fits[best_index].nparams_, best_score);
+  }
+
   if(test_single_function_) {
-    if(best_index < 0 || best_index >= pdf_list.getSize()) best_index = 0;
     RooAbsPdf* single_pdf = (RooAbsPdf*) pdf_list.at(best_index);
     RooArgList single_list;
     single_list.add(*single_pdf);
     if(fits.size() > (size_t) best_index) fits = std::vector<env_fit_t>{fits[best_index]};
-    return new RooMultiPdf(Form("%s_pdf", name.Data()), Form("%s PDF", name.Data()), cat, single_list);
+    auto single = new RooMultiPdf(Form("%s_pdf", name.Data()), Form("%s PDF", name.Data()), cat, single_list);
+    cat.setIndex(0);
+    return single;
   }
 
-  return new RooMultiPdf(Form("%s_pdf", name.Data()), Form("%s PDF", name.Data()), cat, pdf_list);
+  auto multi_pdf = new RooMultiPdf(Form("%s_pdf", name.Data()), Form("%s PDF", name.Data()), cat, pdf_list);
+  cat.setIndex(best_index); // fits are aligned with pdf_list, so this indexes the best function
+  return multi_pdf;
 }
 
 ///////////////////////////////////////////

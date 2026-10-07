@@ -357,6 +357,11 @@ int fit_component_model(TString process,
 
   const TString suffix = (isys < 0) ? "" : Form("_sys_%i", isys);
   TH1* h_smoothed_for_ws = did_smooth ? h : nullptr;
+  // Whether the saved shape is the simulated histogram itself, not a fit to it or a smoothed
+  // version of it: only such a template carries the MC statistical fluctuations of the sample.
+  // The signal and DIO histogram models save the input histogram, the others the chosen PDF.
+  const bool saves_input_hist = (component == "signal" || component == "dio") && hist_pdfs_;
+  const bool mc_template = !did_smooth && (saves_input_hist || pdf->InheritsFrom("RooHistPdf"));
   if(component == "signal" || component == "dio") {
     return save_fit_workspace_with_hist(process, selection, tag, component, pdf, obs, norm,
                                         h,
@@ -367,7 +372,8 @@ int fit_component_model(TString process,
                                         h_t0_raw_for_ws,
                                         h_t0_normalized_for_ws,
                                         h_t0_smoothed_for_ws,
-                                        suffix);
+                                        suffix,
+                                        mc_template);
   }
   return save_fit_workspace(process, selection, tag, component, component_title, pdf, obs, norm,
                             hist_pdfs_,
@@ -377,7 +383,8 @@ int fit_component_model(TString process,
                             h_t0_raw_for_ws,
                             h_t0_normalized_for_ws,
                             h_t0_smoothed_for_ws,
-                            suffix);
+                            suffix,
+                            mc_template);
 }
 
 #endif

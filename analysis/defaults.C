@@ -2,14 +2,14 @@
 #define __CONVANA_ANALYSIS_DEFAULTS__
 
 const char*  hist_path_   = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms/";
-bool         hist_pdfs_   = true ; // Use functions or histograms in the model
+bool         hist_pdfs_   = false; // Use functions or histograms in the model
 bool         include_sys_ = false; // Evaluate systematics
 bool         use_evtana_  = true ; // Use Mu2eEvtAna inputs (EventNtuple)
 bool         run1a_range_ = false; // Use Run 1A paper range (only in EvtAna mode)
 bool         include_t0_  = true ; // Add t0 histograms to the output
 bool         do_2d_fit_   = false; // Perform a (p, t) fit instead of a 1D p fit
 bool         unbinned_    = false; // Perform unbinned fits
-bool         use_env_     = false; // Model the mu- --> e+ background with an envelope
+bool         use_env_     = true ; // Model the mu- --> e+ background with an envelope
 bool         blind_data_  = true ; // Blind the signal region when evaluating envelope fits
 int          verbose_     = 1    ; // Printout level for the envelope construction
 
@@ -41,7 +41,6 @@ void set_evtana_defaults() {
   if(run1a_range_) {
     // xmin_em_ = 97.;
     bin_width_ = 0.2; // to better match the paper fit
-    // bin_width_ = 0.1; // to better match the cut-and-count range
   }
 }
 #endif

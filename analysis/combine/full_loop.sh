@@ -13,10 +13,12 @@ Help() {
     echo "                               selection, quoted (default: none). Offsets are sums of the flags"
     echo "                               1000 (inverted CRV veto), 2000 (inverted time cut, early time"
     echo "                               for set 75), and 4000 (charge-inverted), e.g. \"1000 2000 4000\""
+    echo "      --mc-stat                Add MC statistical yield uncertainties to the cards, for"
+    echo "                               processes whose PDF is the MC histogram (not fit or smoothed)"
     echo "      --skip-fits              Skip per-selection fit stage"
     echo "      --skip-model             Skip model-building stage"
     echo "      --skip-cards             Skip datacard merge stage"
-    echo "      --skip-combine           Skip combine execution stage"
+    echo "      --test-combine           Test combine execution stage"
     echo "      --no-sys                 Skip fitting systematics"
     echo "      --evt-ana                Assume Mu2eEvtAna processing"
     echo "  -h, --help                   Show this help"
@@ -35,10 +37,11 @@ PROCESS=""
 SELECTIONS=""
 TAG=""
 CONTROLREGIONS=""
+MCSTAT="false"
 SKIPFITS=""
 SKIPMODEL=""
 SKIPCARDS=""
-SKIPCOMBINE=""
+TESTCOMBINE=""
 NOSYS=""
 EVTANA=""
 
@@ -66,6 +69,10 @@ if [[ $# -gt 0 ]] && [[ "${1}" == -* ]]; then
                 CONTROLREGIONS="${2:-}"
                 shift 2
                 ;;
+            --mc-stat)
+                MCSTAT="true"
+                shift
+                ;;
             --skip-fits)
                 SKIPFITS="1"
                 shift
@@ -78,8 +85,8 @@ if [[ $# -gt 0 ]] && [[ "${1}" == -* ]]; then
                 SKIPCARDS="1"
                 shift
                 ;;
-            --skip-combine)
-                SKIPCOMBINE="1"
+            --test-combine)
+                TESTCOMBINE="1"
                 shift
                 ;;
             --no-sys)
@@ -144,7 +151,7 @@ build_set() {
         ./perform_fits.sh "${PROCESS}" "${set}" "${TAG}" "${EVTANA}" "${NOSYS}"
     fi
     if [[ "${SKIPMODEL}" == "" ]]; then
-        root.exe -q -b "build_model.C(\"${PROCESS}\", ${set}, \"${TAG}\")"
+        root.exe -q -b "build_model.C(\"${PROCESS}\", ${set}, \"${TAG}\", ${MCSTAT})"
     fi
 }
 
@@ -197,7 +204,7 @@ if [[ "${SKIPCARDS}" == "" ]]; then
     combineCards.py "${MERGELISTCC[@]}" >> "${MERGECARDCC}"
 fi
 
-if [[ "${SKIPCOMBINE}" == "" ]]; then
+if [[ "${TESTCOMBINE}" != "" ]]; then
     echo "Running combine:"
     ADDON=""
     if [[ "${TAG}" != "" ]]; then

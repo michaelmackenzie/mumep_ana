@@ -17,6 +17,7 @@ struct pdf_info {
   TString name_ = "";
   TString title_ = "";
   int sys_ = -1;
+  bool mc_template_ = false; // the PDF is the MC histogram itself, not a fit or smoothed shape
 };
 
 struct DatasetInfo_t {

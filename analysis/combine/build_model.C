@@ -9,8 +9,9 @@
 #include "../tools/write_datacard.C"
 // #include "combine/HiggsAnalysis/CombinedLimit/src/RooLandauCB.cc"
 
-bool print_      = true;
-bool write_card_ = true;
+bool print_           = true;
+bool write_card_      = true;
+bool include_mc_stat_ = false; // add MC statistical yield uncertainties to the cards, set by build_model
 
 //---------------------------------------------------------------------------------------------------------------------------
 // Read the shape systematic variations of each process, import their PDFs into the workspace as
@@ -85,6 +86,28 @@ int add_shape_norm_terms(RooWorkspace& ws, const shape_sys_map_t& shape_sys, con
     ws.import(RooProduct(norm_name, "Shape systematic yield effects", terms), RooFit::RecycleConflictNodes(), RooFit::Silence());
   }
   return 0;
+}
+
+// Relative MC statistical uncertainty of a process's yield in [xlow, xhigh] (the full histogram
+// range if xlow >= xhigh), from the bin errors of its normalized input histogram. Only a PDF that
+// is the MC histogram itself gets one: a fit or smoothed shape already averages over the sample's
+// fluctuations. Returns 0 otherwise, or if it cannot be evaluated, e.g. for the envelope.
+double mc_stat_rel_unc(const pdf_info& info, const double xlow = 1., const double xhigh = -1.) {
+  if(!include_mc_stat_ || !info.mc_template_) return 0.;
+  const TH1* h = info.normalized_hist_;
+  if(!h) return 0.;
+  const int bin_low  = (xlow < xhigh) ? h->GetXaxis()->FindFixBin(xlow  + 1.e-6) : 1;
+  const int bin_high = (xlow < xhigh) ? h->GetXaxis()->FindFixBin(xhigh - 1.e-6) : h->GetNbinsX();
+  double error = 0.;
+  const double integral = h->IntegralAndError(bin_low, bin_high, error);
+  if(integral <= 0.) {
+    if(info.rate_ > 0. && xlow >= xhigh) {
+      cout << __func__ << ": " << info.name_.Data() << " has a yield of " << info.rate_
+           << " but no simulated events in its input histogram, no MC statistical uncertainty assigned\n";
+    }
+    return 0.;
+  }
+  return error / integral;
 }
 
 const TH1* preferred_momentum_hist(const pdf_info& info) {
@@ -352,7 +375,10 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
 }
 
 //---------------------------------------------------------------------------------------------------------------------------
-int build_model(TString process = "mumem", int selection = 20, TString tag = "") {
+// include_mc_stat: add the MC statistical uncertainty of the yield of each process whose PDF is
+// the MC histogram itself (not fit or smoothed) to the cards
+int build_model(TString process = "mumem", int selection = 20, TString tag = "", const bool include_mc_stat = false) {
+  include_mc_stat_ = include_mc_stat;
   if(use_evtana_) set_evtana_defaults();
   init_physics(tag);
   process.ToLower();
@@ -455,6 +481,8 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   envelope_t envelope;
   // The envelope absorbs every background, so it is only used in the signal region: a control
   // region is there to constrain individually modeled backgrounds
+  // The MC background templates; empty unless the envelope replaces some of them in the model
+  std::vector<pdf_info> mc_background_model;
   if(use_env_ && process == "mumep" && region.is_control()) {
     cout << __func__ << ": Not using the background envelope in control region " << selection << endl;
   } else if(use_env_ && process == "mumep") {
@@ -497,6 +525,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
     env_info.title_ = envelope.title_;
     env_info.color_ = kGray;
     env_info.hist_  = envelope.pdf_->createHistogram(Form("%s_%i_env_hist", process.Data(), selection), obs);
+    mc_background_model = background_model; // kept for the comparison file
     background_model = explicit_model;
     background_model.push_back(env_info);
   }
@@ -574,7 +603,7 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
                         signal_model.rate_,
                         smoothed_dir);
   }
-  for(auto& bkg : background_model) {
+  auto write_bkg_workflow = [&](const pdf_info& bkg) {
     write_workflow_hist(bkg.raw_hist_, bkg.name_, bkg.title_, bkg.rate_, raw_dir, false);
     write_workflow_hist(bkg.normalized_hist_, bkg.name_, bkg.title_, bkg.rate_, normalized_dir);
     write_workflow_hist(bkg.smoothed_hist_, bkg.name_, bkg.title_, bkg.rate_, smoothed_dir);
@@ -596,6 +625,26 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
                           bkg.rate_,
                           smoothed_dir);
     }
+  };
+  for(auto& bkg : background_model) write_bkg_workflow(bkg);
+
+  // MC templates of the backgrounds the envelope absorbed: category/ holds the fit model (signal,
+  // envelope, explicit backgrounds), so these go to mc_templates/ to keep sums over category/
+  // meaningful, at their expected yields, with their workflow histograms
+  auto in_model = [&](const TString& name) {
+    for(auto& bkg : background_model) if(bkg.name_ == name) return true;
+    return false;
+  };
+  TDirectory* mc_dir = nullptr;
+  for(auto& bkg : mc_background_model) {
+    if(in_model(bkg.name_) || !bkg.hist_) continue;
+    if(!mc_dir) mc_dir = fcomp->mkdir("mc_templates");
+    mc_dir->cd();
+    TH1* hmc_comp = (TH1*) bkg.hist_->Clone(bkg.name_);
+    if(hmc_comp->Integral() > 0.) hmc_comp->Scale(bkg.rate_ / hmc_comp->Integral());
+    hmc_comp->SetTitle(bkg.title_);
+    hmc_comp->Write();
+    write_bkg_workflow(bkg);
   }
 
   fcomp->cd();
@@ -739,10 +788,11 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
   if(write_card_) {
     // construct the card info list
     std::vector<card_info_t> card_info;
-    if(has_signal) card_info.push_back(card_info_t(signal_model.name_, signal_model.rate_, selection));
+    if(has_signal) card_info.push_back(card_info_t(signal_model.name_, signal_model.rate_, selection, false,
+                                                   mc_stat_rel_unc(signal_model)));
     for(auto& bkg : background_model) {
       const bool floating = envelope.pdf_ && bkg.pdf_ == envelope.pdf_;
-      card_info.push_back(card_info_t(bkg.name_, bkg.rate_, selection, floating));
+      card_info.push_back(card_info_t(bkg.name_, bkg.rate_, selection, floating, mc_stat_rel_unc(bkg)));
     }
     std::vector<TString> extra_lines;
     if(envelope.cat_) extra_lines.push_back(Form("%-10s discrete", envelope.cat_->GetName()));
@@ -807,15 +857,17 @@ int build_model(TString process = "mumem", int selection = 20, TString tag = "")
 
     // construct the card info list
     std::vector<card_info_t> card_info;
-    if(has_signal) card_info.push_back(card_info_t(signal_model.name_, nsig, selection));
+    if(has_signal) card_info.push_back(card_info_t(signal_model.name_, nsig, selection, false,
+                                                   mc_stat_rel_unc(signal_model, xlow, xhigh)));
     for(size_t index = 0; index < background_model.size(); ++index) {
       const auto& bkg = background_model[index];
       const double nbkg_i  = bkg_hists[index]->Integral(best_low, best_high);
-      card_info.push_back(card_info_t(bkg.name_, nbkg_i, selection));
+      card_info.push_back(card_info_t(bkg.name_, nbkg_i, selection, false, mc_stat_rel_unc(bkg, xlow, xhigh)));
     }
     const double nexp = nsig + nbkg;
     const double sig_eff_cc = nsig / n_signal_exp;
-    if(write_counting_datacard(process, card_info, outname, (int) std::lround(nexp),npot_, livetime_, nmuons_, signal_br_, sig_eff_cc, xlow, xhigh)) {
+    if(write_counting_datacard(process, card_info, outname, (int) std::lround(nexp),npot_, livetime_, nmuons_, signal_br_, sig_eff_cc, xlow, xhigh,
+                               shape_sys)) {
       cout << __func__ << ": Counting data card writing failed!\n";
       return 1;
     }

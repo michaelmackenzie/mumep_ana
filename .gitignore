@@ -21,6 +21,7 @@
 *.pkl
 *.json
 *.txt
+*.csv
 */datacards
 notes.org
 #Ignore TMVA outputs

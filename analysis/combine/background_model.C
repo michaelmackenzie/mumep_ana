@@ -133,6 +133,9 @@ pdf_info read_model(const TString name, const TString process, const int selecti
   res.t0_smoothed_hist_ = h_t0_smoothed;
   res.obs_   = obs;
   res.norm_  = norm;
+  // workspaces written before the flag existed are treated as fit/smoothed shapes
+  RooRealVar* template_flag = (RooRealVar*) workspace->var(Form("%s_%i_%s_mc_template", process.Data(), selection, name.Data()));
+  res.mc_template_ = template_flag && template_flag->getVal() > 0.5;
   res.rate_  = norm->getVal();
   res.name_  = name;
   res.sys_   = isys;
@@ -377,7 +380,7 @@ pdf_info get_rmc_ext_model(RooRealVar& obs, TString process, int selection, cons
 
   if(process == "mumep") {
     if(knockout == "1n") {
-      pdf = create_gaus_poly_pdf(obs, -1, name);
+      pdf = create_gaussian_pdf(obs, name);
       // pdf = create_exponential(obs, 1, name);
       pdf->SetName(Form("%s_pdf", name));
     } else {
@@ -425,7 +428,7 @@ pdf_info get_rmc_int_model(RooRealVar& obs, TString process, int selection, cons
 
   if(process == "mumep") {
     if(knockout == "1n") {
-      pdf = create_gaus_poly_pdf(obs, -1, name);
+      pdf = create_gaussian_pdf(obs, name);
       // pdf = create_exponential(obs, 1, name);
     } else {
       pdf = create_gaus_poly_pdf(obs, 1, name);
