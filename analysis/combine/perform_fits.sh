@@ -133,7 +133,7 @@ if [[ "${PROCESS}" == "mumep" ]]; then
     done
 elif [[ "${EVTANA}" != "" ]] || [[ "${CHARGE_INVERTED}" != "" ]]; then
     # a charge-inverted control region is there to constrain RMC, so it always models it
-    run_fit rmc_int_fit
+    # run_fit rmc_int_fit
     run_fit rmc_ext_fit
 fi
 if [[ "${NOSYS}" == "" ]] && [[ "${CHARGE_INVERTED}" != "" ]]; then

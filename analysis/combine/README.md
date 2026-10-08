@@ -232,6 +232,61 @@ python3 sensitivity_vs_fit_range.py datacards/combine_mumem_75_<tag>.txt \
   figures from the `sensitivity_vs_fit_range.csv` of an earlier scan, without ROOT or Combine; for a
   table from before the `median` column, it reads the Asimov limits from the scan's Combine logs.
 
+## Selection Variations
+
+`make_selection_hists.C` writes dataset histogram files for a tightened selection, for fast
+selection sensitivity tests without reprocessing the EventNtuples (EventNtuple inputs only):
+
+```bash
+root.exe -q -b 'make_selection_hists.C("40", "trk_qual > 0.9 && trk_pid > 0.95", "selection_hists/qual_pid")'
+CONVANA_HIST_PATH=selection_hists/qual_pid ./full_loop.sh --evt-ana -p mumep -s "40" -t qual_pid
+```
+
+- The model inputs of each requested set (`obs`, `t0`, and a few track variables) are re-filled from
+  the set's selection tree, `Ana/Hist/trs_<set>/tree`, for tracks passing the extra cut, with the
+  binning of the original histograms. The cut uses the tree branch names (`trk_p`, `trk_t0`,
+  `trk_qual`, `trk_pid`, `trk_d0`, `trk_rmax`, ...) and can only tighten the set's selection. Only
+  sets with a selection tree can be re-filled (e.g. 40, 75, 81, and their control-region sets 1040,
+  2040, ...), so pass the control-region sets too when the model uses them (`"40 1040 2040"`).
+- The output files keep the input names and layout, with the `Norm` tree for the normalization, and
+  `obs`/`t0` of all other sets copied unchanged, so shape and control-region sets still resolve.
+  `CONVANA_HIST_PATH` points the model building at them in place of the default histogram directory.
+- Several variations are made in one pass over the trees with a cut file, one `<tag> : <cut>` per
+  line, each written to `<out_dir>/<tag>/`:
+  `root.exe -q -b 'make_selection_hists.C("40", "cuts.txt", "selection_hists")'`
+- With no cut, the outputs reproduce the original `obs` and `t0` histograms exactly.
+
+`selection_test.sh` runs a full sensitivity test of a selection:
+
+```bash
+./selection_test.sh "trk_t0 > 540" t0_540
+```
+
+1. `make_selection_hists.C` writes the histograms to `test_hists/<tag>/`.
+2. `full_loop.sh` builds a histogram-based model (`<tag>_hists`: `CONVANA_HIST_PDFS=1`,
+   `CONVANA_USE_ENV=0`) and an envelope model (`<tag>_env`: `CONVANA_HIST_PDFS=0`,
+   `CONVANA_USE_ENV=1`) from them, in parallel, without the systematic fits (`--no-sys`), since
+   the test histograms only have the nominal set histograms.
+3. Combine generates the Asimov data set of the histogram-based model and fits the envelope model to
+   it (`AsymptoticLimits` on that data set). The limit on it is the sensitivity estimate, and does
+   not depend on which envelope function is the default. The histogram model's own Asimov limit is
+   computed as a reference.
+
+The limits are written to `test_hists/<tag>/summary.txt`, with the logs in `logs/` and the Combine
+outputs in `combine/`. Use `-s`/`-c` for other sets and control regions, `--loop-args` and
+`--fit-args` to pass options to `full_loop.sh` and Combine, and `--skip-hists`/`--skip-models` to
+reuse earlier steps.
+
+### Model configuration from the shell
+
+`defaults.C` reads these environment variables, so the model setup can be chosen without editing it:
+
+- `CONVANA_HIST_PATH`: histogram directory, in place of the default one
+- `CONVANA_HIST_PDFS`: `1` for histogram PDFs, `0` for fit functions (`hist_pdfs_`)
+- `CONVANA_USE_ENV`: `1` to model the mumep background with the envelope (`use_env_`)
+
+Unset variables keep the values in `defaults.C`.
+
 ## Driver Script Configuration
 
 `perform_fits.sh` and `full_loop.sh` support environment overrides:

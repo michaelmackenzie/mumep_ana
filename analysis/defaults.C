@@ -1,15 +1,30 @@
 #ifndef __CONVANA_ANALYSIS_DEFAULTS__
 #define __CONVANA_ANALYSIS_DEFAULTS__
 
-const char*  hist_path_   = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms/";
-bool         hist_pdfs_   = false; // Use functions or histograms in the model
+// Histogram directory, overridden by the CONVANA_HIST_PATH environment variable (e.g. for make_selection_hists.C outputs)
+TString      hist_path_str_ = (gSystem->Getenv("CONVANA_HIST_PATH")) ? TString(gSystem->Getenv("CONVANA_HIST_PATH")) + "/"
+                                                                       : TString("/exp/mu2e/data/projects/run1a/mumep_ana/histograms/");
+const char*  hist_path_   = hist_path_str_.Data();
+
+// Boolean flag from the environment (1/true/yes or 0/false/no), or the given default if it is not set
+bool env_flag(const char* name, const bool default_value) {
+  const char* value = gSystem->Getenv(name);
+  if(!value) return default_value;
+  TString v(value); v.ToLower();
+  if(v == "1" || v == "true"  || v == "yes") return true;
+  if(v == "0" || v == "false" || v == "no" ) return false;
+  printf("env_flag: Unrecognized value %s=%s, using the default (%i)\n", name, value, default_value);
+  return default_value;
+}
+
+bool         hist_pdfs_   = env_flag("CONVANA_HIST_PDFS", true ); // Use functions or histograms in the model
 bool         include_sys_ = false; // Evaluate systematics
 bool         use_evtana_  = true ; // Use Mu2eEvtAna inputs (EventNtuple)
 bool         run1a_range_ = false; // Use Run 1A paper range (only in EvtAna mode)
 bool         include_t0_  = true ; // Add t0 histograms to the output
 bool         do_2d_fit_   = false; // Perform a (p, t) fit instead of a 1D p fit
 bool         unbinned_    = false; // Perform unbinned fits
-bool         use_env_     = true ; // Model the mu- --> e+ background with an envelope
+bool         use_env_     = env_flag("CONVANA_USE_ENV", false); // Model the mu- --> e+ background with an envelope
 bool         blind_data_  = true ; // Blind the signal region when evaluating envelope fits
 int          verbose_     = 1    ; // Printout level for the envelope construction
 

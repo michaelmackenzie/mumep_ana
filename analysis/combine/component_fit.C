@@ -302,9 +302,11 @@ int fit_component_model(TString process,
 
   auto frame = obs.frame();
   if(component == "cosmic" && data_control) {
-    data_primary.plotOn(frame, RooFit::Name("data_sr"), RooFit::MarkerColor(kRed));
-    pdf->plotOn(frame, RooFit::Name("pdf"));
-    data_control->plotOn(frame, RooFit::Name("data_cr"));
+    // compare the signal region to the PDF at the saved signal region normalization, whichever
+    // input defined the shape; the control region is overlaid for reference
+    data_primary.plotOn(frame, RooFit::Name("data"), RooFit::MarkerColor(kRed), RooFit::LineColor(kRed));
+    pdf->plotOn(frame, RooFit::Name("pdf"), RooFit::Normalization(norm_val, RooAbsReal::NumEvent));
+    data_control->plotOn(frame, RooFit::Name("data_cr"), RooFit::MarkerColor(kBlue), RooFit::LineColor(kBlue), RooFit::MarkerStyle(24));
   } else {
     data_primary.plotOn(frame, RooFit::Name("data"));
     pdf->plotOn(frame, RooFit::Name("pdf"));

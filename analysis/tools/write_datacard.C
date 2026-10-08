@@ -77,6 +77,20 @@ namespace datacard {
     int column_ = 10;
   };
 
+  // Rate as written to the card: Combine multiplies a parametric shape by its <pdf>_norm variable,
+  // so a freely floating process takes a unit rate and carries its yield in the workspace
+  TString card_rate(const card_info_t& info) {
+    return Form("%.4f", (info.floating_) ? 1. : info.rate_);
+  }
+
+  // Whether a process enters the model: Combine and combineCards.py drop zero-rate processes, and
+  // with them every nuisance that only affects them, so such a process takes no uncertainties here
+  // (a nuisance group naming a dropped nuisance fails the merged card). The rate is checked as
+  // written, since a small positive rate is written, and read by Combine, as 0.
+  bool contributes(const card_info_t& info) {
+    return card_rate(info).Atof() > 0.;
+  }
+
   bool is_signal(const card_info_t& info, const TString& signal_name) {
     return info.name_ == signal_name || info.name_ == "signal";
   }
@@ -120,9 +134,7 @@ namespace datacard {
       bins .push_back(bin_name);
       names.push_back(info.name_);
       ids  .push_back(Form("%i", (is_signal(info, signal_name)) ? 0 : ++nbkg));
-      // Combine multiplies a parametric shape by its <pdf>_norm variable, so a freely floating
-      // process takes a unit rate here and carries its yield in the workspace
-      rates.push_back(Form("%.4f", (info.floating_) ? 1. : info.rate_));
+      rates.push_back(card_rate(info));
     }
     outfile << sep.Data() << std::endl;
     outfile << row("bin"    , bins , layout).Data() << std::endl;
@@ -131,15 +143,15 @@ namespace datacard {
     outfile << row("rate"   , rates, layout).Data() << std::endl << std::endl;
   }
 
-  // lnN rate uncertainties. A data-driven, freely floating process takes none, and an
-  // uncertainty that affects no process in the card is left out.
+  // lnN rate uncertainties. A data-driven, freely floating process takes none, nor does a zero-rate
+  // process, and an uncertainty that affects no process in the card is left out.
   std::vector<sys_line_t> rate_lines(const std::vector<card_info_t>& infos) {
     std::vector<sys_line_t> lines;
     for(auto& sys : rate_systematics()) {
       sys_line_t line{sys.name_, "lnN", {}};
       bool used = false;
       for(auto& info : infos) {
-        const bool applies = !info.floating_ && sys.applies_(info.name_);
+        const bool applies = !info.floating_ && contributes(info) && sys.applies_(info.name_);
         used |= applies;
         line.entries_.push_back((applies) ? TString(Form("%.3f", sys.kappa_)) : TString("-"));
       }
@@ -174,7 +186,7 @@ namespace datacard {
       bool used = false;
       for(auto& info : infos) {
         auto effect = sys.second.find(info.name_);
-        const bool applies = effect != sys.second.end() && !info.floating_
+        const bool applies = effect != sys.second.end() && !info.floating_ && contributes(info)
                           && effect->second.complete() && effect->second.changes_norm();
         used |= applies;
         line.entries_.push_back((applies) ? TString(Form("%.3f/%.3f", effect->second.kappa_down(), effect->second.kappa_up()))
@@ -304,7 +316,7 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
     for(auto& info : infos) {
       bool applies = false;
       auto effect = sys.second.find(info.name_);
-      if(effect != sys.second.end() && !info.floating_) {
+      if(effect != sys.second.end() && !info.floating_ && datacard::contributes(info)) {
         const TString base = pdf_name(info.name_);
         const bool found_up   = ws->pdf(base + "_" + sys.first + "Up"  );
         const bool found_down = ws->pdf(base + "_" + sys.first + "Down");
