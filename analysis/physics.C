@@ -1,6 +1,7 @@
 // Relevant physics constants
 #ifndef __CONVANA_ANALYSIS_PHYSICS__
 #define __CONVANA_ANALYSIS_PHYSICS__
+#include "defaults.C"
 
 //--------------------------------------------------------
 // Livetime/muon stop normalization
@@ -65,7 +66,7 @@ double nmuons_per_pot_mds2c_ = 0.0015576895;
 double nmuons_mds2c_         = npot_mds2a_*nmuons_per_pot_mds2a_;
 
 // Run 1a info
-double livetime_run1a_       = 28.*24.*60.*60.*duty_cycle_1bb_; // 28 days of wall time, 100% up
+double livetime_run1a_       = 28.*24.*60.*60.*duty_cycle_1bb_; // 28 days of wall time, 100% up (2BB with use_2bb_, see set_run1a_exposure)
 double npot_run1a_           = livetime_run1a_ * npot_rate_1bb_; // livetime * (POT/event)/1695.e-9
 double nmuons_per_pot_run1a_ = 0.000767114;
 double nmuons_run1a_         = npot_run1a_*nmuons_per_pot_run1a_;
@@ -120,8 +121,21 @@ double rmc_ps_0n_frac_80_     = 0.03319  ; // Fraction above 80 MeV
 double rmc_ps_1n_frac_80_     = 0.0013175; // Fraction above 80 MeV
 
 
+// Run 1A exposure: 28 days of wall time at the 1BB duty cycle and intensity, or at the 2BB ones when using the inputs
+// re-weighted to 2BB (use_2bb_, EventNtuple inputs only)
+void set_run1a_exposure() {
+  const bool is_2bb = use_2bb_ && use_evtana_;
+  if(use_2bb_ && !use_evtana_) printf("init_physics: WARNING: 2BB inputs are only available for EventNtuple inputs, using 1BB\n");
+  livetime_run1a_ = 28.*24.*60.*60.*((is_2bb) ? duty_cycle_2bb_ : duty_cycle_1bb_);
+  npot_run1a_     = livetime_run1a_ * ((is_2bb) ? npot_rate_2bb_ : npot_rate_1bb_);
+  nmuons_run1a_   = npot_run1a_*nmuons_per_pot_run1a_;
+}
+
 void init_physics(TString tag) {
   tag.ToLower();
+  set_run1a_exposure();
+  if(use_2bb_ && use_evtana_ && tag.Contains("mds"))
+    printf("init_physics: WARNING: the MDS ensembles are 1BB data, but the 2BB inputs (use_2bb_) are in use\n");
 
   // livetime_       = livetime_su2020_      ; // default to SU2020
   // npot_           = npot_su2020_          ;

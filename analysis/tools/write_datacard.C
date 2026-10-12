@@ -218,10 +218,22 @@ namespace datacard {
     return names;
   }
 
-  void write_footer(std::ofstream& outfile) {
+  // Name of the scale factor of one process's yield
+  TString scale_name(const TString& process) {
+    return "scale_" + process;
+  }
+
+  void write_footer(std::ofstream& outfile, const std::vector<card_info_t>& infos) {
     // yield scale factor, useful for scanning livetimes
     outfile << "yieldScale rateParam * * 1." << std::endl;
     outfile << "nuisance edit freeze yieldScale" << std::endl;
+    // per-process yield scale factors, e.g. combine --setParameters scale_dio=2. They are frozen, so they only rescale
+    // the nominal yields. A zero-rate process is dropped by Combine, so it takes none.
+    for(auto& info : infos) {
+      if(!contributes(info)) continue;
+      outfile << Form("%s rateParam * %s 1.", scale_name(info.name_).Data(), info.name_.Data()) << std::endl;
+      outfile << Form("nuisance edit freeze %s", scale_name(info.name_).Data()) << std::endl;
+    }
   }
 }
 
@@ -414,7 +426,7 @@ int write_datacard(TString signal_name, std::vector<card_info_t> infos, TString 
   datacard::write_group(outfile, "mcstat", datacard::line_names(mc_stat_lines));
   datacard::write_group(outfile, "shape" , shape_names);
 
-  datacard::write_footer(outfile);
+  datacard::write_footer(outfile, infos);
   outfile.close();
   f->Close();
 
@@ -481,7 +493,7 @@ int write_counting_datacard(TString signal_name, std::vector<card_info_t> infos,
   datacard::write_group(outfile, "mcstat", datacard::line_names(mc_stat_lines));
   datacard::write_group(outfile, "shape" , datacard::line_names(shape_norm_lines));
 
-  datacard::write_footer(outfile);
+  datacard::write_footer(outfile, infos);
   outfile.close();
 
   return 0;

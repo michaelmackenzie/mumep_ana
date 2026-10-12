@@ -20,6 +20,7 @@ bool env_flag(const char* name, const bool default_value) {
 bool         hist_pdfs_   = env_flag("CONVANA_HIST_PDFS", true ); // Use functions or histograms in the model
 bool         include_sys_ = false; // Evaluate systematics
 bool         use_evtana_  = true ; // Use Mu2eEvtAna inputs (EventNtuple)
+bool         use_2bb_     = env_flag("CONVANA_USE_2BB", false); // Use the Mu2eEvtAna inputs re-weighted to 2BB (mode 2), with the 2BB exposure (only in EvtAna mode)
 bool         run1a_range_ = false; // Use Run 1A paper range (only in EvtAna mode)
 bool         include_t0_  = true ; // Add t0 histograms to the output
 bool         do_2d_fit_   = false; // Perform a (p, t) fit instead of a 1D p fit
@@ -51,7 +52,7 @@ double       t_max_       = 1650.;
 void set_evtana_defaults() {
   dir_path_  = "Ana/";
   file_type_ = "root";
-  hist_mode_ = 1;
+  hist_mode_ = (use_2bb_) ? 2 : 1; // mode 2: beam intensity re-weighted to 2BB
   include_sys_ = false; // systematics aren't fully implemented
   if(run1a_range_) {
     // xmin_em_ = 97.;

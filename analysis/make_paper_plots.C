@@ -27,7 +27,7 @@ int make_paper_plots(const bool mumem = false, TString tag = "paper_r0101") {
       plotter_->bkgs_ = {"pbar", "rpc_int", "rpc_ext", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n", "cosmic", "dio"}; // only some are available
     else
       plotter_->bkgs_ = {"pbar", "rpc_int", "rpc_ext", "cosmic", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n"}; // only some are available
-    hist_mode_ = 1;
+    hist_mode_ = (use_2bb_) ? 2 : 1; // mode 2: beam intensity re-weighted to 2BB
   }
   if(plotter_->init("", tag)) {
     delete plotter_;
