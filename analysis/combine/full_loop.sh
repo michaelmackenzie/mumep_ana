@@ -21,6 +21,8 @@ Help() {
     echo "      --test-combine           Test combine execution stage"
     echo "      --no-sys                 Skip fitting systematics"
     echo "      --evt-ana                Assume Mu2eEvtAna processing"
+    echo "      --2bb                    Use the Mu2eEvtAna inputs re-weighted to 2BB (histogram mode 2) and the"
+    echo "                               2BB duty cycle and N(POT) per microbunch (sets CONVANA_USE_2BB=1)"
     echo "  -h, --help                   Show this help"
     echo ""
     echo "Environment fit controls forwarded to perform_fits.sh:"
@@ -95,6 +97,10 @@ if [[ $# -gt 0 ]] && [[ "${1}" == -* ]]; then
                 ;;
             --evt-ana)
                 EVTANA="1"
+                shift
+                ;;
+            --2bb)
+                export CONVANA_USE_2BB=1
                 shift
                 ;;
             --)

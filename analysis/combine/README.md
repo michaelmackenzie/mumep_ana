@@ -186,6 +186,10 @@ names with the signal region, so the control region constrains them in the joint
   in its workspace, and workspaces from before this flag count as fit/smoothed.
 - Nuisance groups `rate`, `mcstat`, and `shape`, e.g. for `--freezeNuisanceGroups` or impact
   breakdowns.
+- Yield scale factors, frozen at 1: `yieldScale` for all processes, and `scale_<process>` for each
+  process in the card (e.g. `scale_dio`, `scale_rmc_ext_0n`), named without the selection so they
+  scale the process in every channel of a merged card. Set them when running Combine to scale the
+  nominal yields, e.g. `--setParameters scale_dio=2,scale_cosmic=0.5`.
 
 ## Sensitivity vs. Fit Range
 
@@ -284,6 +288,9 @@ reuse earlier steps.
 - `CONVANA_HIST_PATH`: histogram directory, in place of the default one
 - `CONVANA_HIST_PDFS`: `1` for histogram PDFs, `0` for fit functions (`hist_pdfs_`)
 - `CONVANA_USE_ENV`: `1` to model the mumep background with the envelope (`use_env_`)
+- `CONVANA_USE_2BB`: `1` to use the Mu2eEvtAna inputs re-weighted to 2BB (`ConvAna.*.m2.root`, from
+  Mu2eEvtAna `make_histograms.C` mode 2), normalized to the 2BB duty cycle (0.246) and N(POT) per
+  microbunch (3.93e7) (`use_2bb_`; `full_loop.sh --2bb` sets it). EventNtuple inputs only
 
 Unset variables keep the values in `defaults.C`.
 
