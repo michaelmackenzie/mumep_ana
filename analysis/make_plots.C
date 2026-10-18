@@ -66,7 +66,7 @@ int print_dataset_info(const int selection) {
 }
 
 //---------------------------------------------------------------------------------------------------
-int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dataset = "mds3c", TString tag = "r0102") {
+int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dataset = "mds3c", TString tag = "r0105") {
   combine_rmc_ = mumem;
   if(plotter_) {
     delete plotter_;

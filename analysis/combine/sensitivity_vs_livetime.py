@@ -66,7 +66,7 @@ parser.add_argument('--gen-params', default='', help='Extra --setParameters for 
 parser.add_argument('--fit-params', default='', help='Extra --setParameters for the fit')
 parser.add_argument('--gen-args', default='', help='Additional arguments for the generation')
 parser.add_argument('--fit-args', default='', help='Additional arguments for the fit')
-parser.add_argument('-T', '--tag', default=None, help='Tag for the outputs (default: <fit card>[_gen_<generation card>])')
+parser.add_argument('-T', '--tag', default=None, help='Tag for the outputs (default: the fit card name)')
 parser.add_argument('--log-dir', default='logs', help='Directory for the Combine logs (default: %(default)s)')
 args = parser.parse_args()
 
@@ -82,11 +82,7 @@ card     = args.card
 gen_card = args.gen_card if args.gen_card else card
 for c in [card, gen_card]:
     if not os.path.isfile(c): parser.error(f'card {c} does not exist')
-card_base = card_name(card)
-if args.tag:
-    card_base = args.tag
-elif os.path.abspath(gen_card) != os.path.abspath(card):
-    card_base += '_gen_' + card_name(gen_card)
+card_base = args.tag if args.tag else card_name(card)
 signal = 'mumem' if 'mumem' in card_base else 'mumep'
 r_range = 100. if 'mumem' in signal else 500.
 
