@@ -104,13 +104,17 @@ def make_samples(exposure, hist_path=None):
     return samples
 
 
-def rate_uncertainties(model):
+def rate_uncertainties(model, rmc_floating=False):
     """The normalization uncertainties of the mu- --> e-/e+ models, correlated across channels. The internal
-    conversion fraction uncertainty (intN) covers both RPC and RMC, which use the same ratio."""
-    model.lnN("lumi", 1.1, processes="!cosmic*", group="rate")   # beam intensity, including the signal
+    conversion fraction uncertainty (intN) covers both RPC and RMC, which use the same ratio. rmc_floating: the RMC
+    rate is a free parameter fit to the control region (rmcNorm), so lumi and rmcN do not apply to the RMC."""
+    model.lnN("lumi", 1.1, processes=["!cosmic*"] + (["!rmc*"] if rmc_floating else []), group="rate")
     model.lnN("csmN", 1.2, processes="cosmic*", group="rate")
     model.lnN("dioN", 1.025, processes="dio*", group="rate")
     model.lnN("rpcN", 1.27, processes="rpc*", group="rate")
     model.lnN("pbrN", 2.0, processes="pbar*", group="rate")
-    model.lnN("rmcN", 1.079, processes="rmc*", group="rate")       # 1.40 +- 0.11 (TRIUMF, 1999)
+    if rmc_floating:
+        model.rate_param("rmcNorm", "rmc*", range=(0., 10.))
+    else:
+        model.lnN("rmcN", 1.079, processes="rmc*", group="rate")   # 1.40 +- 0.11 (TRIUMF, 1999)
     model.lnN("intN", 1.045, processes="*_int*", group="rate")

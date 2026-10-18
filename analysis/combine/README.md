@@ -14,6 +14,7 @@ does the statistics.
 - `sensitivity_vs_fit_range.py`: expected sensitivity vs. the momentum fit range.
 - `envelope_scans.py`: likelihood scans of r for each envelope function and with the index profiled.
 - `sensitivity_vs_livetime.py`: expected sensitivity vs. a livetime scale factor.
+- `rmc_constraint_study.py`: the RMC rate and spectrum power measured in the e+ control region.
 - `selection_comparisons.py`: Asimov expected limits of several models (shape and cut-and-count, with and without
   the constrained nuisances, toys); `--single-test` for only the shape limit with all uncertainties.
 
@@ -219,6 +220,39 @@ Asimov data set with the generation card at each scale, and fits it with the fit
 ```bash
 python3 sensitivity_vs_livetime.py models/mumep_40_env/combined.txt --gen-card models/mumep_40_hists/combined.txt
 ```
+
+## RMC rate and spectrum power from the control region
+
+With a charge-inverted control region in the model, `build_model.py` lets the control region data measure the RMC:
+
+- `rmcNorm`: the RMC rate, a free scale of every RMC process in every channel, so the signal-region RMC follows the
+  rate measured in the control region. `rmcN` and `lumi` do not apply to the RMC then.
+- `RMCPower`: the photon spectrum power (the Mu2eEvtAna variations of x(1-x)^n, n = 2 +- 0.5, on the 0n samples),
+  shape only: its up/down templates keep the nominal yield of each process in each channel, so it is separate from
+  the rate. It has a flat prior (`shapeU`); `--rmc-power` sets another treatment (off, constrained).
+- `intN` keeps its prior, fixing the internal/external ratio.
+
+Without a control region, the RMC keeps the `rmcN` prior and no power uncertainty.
+
+`rmc_constraint_study.py` tests the constraints on the background-only Asimov data set:
+
+```bash
+./rmc_constraint_study.py [-s 75] [--cr-range 94 105]
+```
+
+- One model with the signal region and the e+ control region (and channel masks to fit either alone), with the power
+  free, and one with a unit-Gaussian prior on it.
+- Profile-likelihood intervals and fit-covariance uncertainties of `RMCPower`, `rmcNorm`, and `intN` for the signal
+  region, the control region, and both; likelihood scans of the power and the rate (each with the other free or
+  fixed) and their 2D contours in the control region; the expected limits with the power free, with the prior, and
+  frozen.
+- Figures, in `rmc_studies/mumem_<set>[_<tag>]/`:
+  - `rmc_cr_data_model.png`: the control region data with the fitted model, its components, and the 68% band
+  - `rmc_cr_rmc_model.png`: the fitted RMC model alone (external, internal, total) with its band
+  - `rmc_cr_fit.png`: the power and rate likelihood curves, their 2D contours, and the RMC shape for n = 1.5, 2, 2.5
+  - `rmc_power_scan.png`, `rmc_power_templates.png`
+- The bands come from sampling the covariance of the control-region fit (all floating parameters with their
+  correlations) and re-evaluating the per-bin yields of the Combine workspace.
 
 ## Selection Variations
 

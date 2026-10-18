@@ -27,7 +27,12 @@ Process shapes (the default PDF type 'auto', see --functions and the FIT_* envir
   pbar, rpc   Chebychev fits (pbar, rpc_ext: 1 coefficient; rpc_int: 2)
   rmc         mu- --> e+: exp(quadratic), i.e. a broad Gaussian (1n), and a Gaussian + linear polynomial (0n); mu- --> e-: a turn-on x
               power law x exponential shape
-  A non-RMC background filling less than 75% of the bins is modeled as uniform. Fitted shapes are used as binned
+  A non-RMC background filling less than 75% of the bins is modeled as uniform.
+
+RMC with a charge-inverted control region (offset 4000): the control region measures the RMC, so its rate floats
+(rmcNorm, a free scale of every RMC process in every channel, in place of rmcN and lumi), and its photon spectrum power
+(RMCPower, shape only) has a flat prior. intN keeps the internal/external ratio. Without one, the RMC rate has the
+rmcN prior and no power uncertainty (--rmc-power sets the power treatment explicitly). Fitted shapes are used as binned
   templates; with --functions they enter the workspace as the fitted PDFs.
 
 Environment (defaults of the options, as used by the macro-based workflow):
@@ -89,6 +94,10 @@ SIGNAL_FIT_MAX = {"mumem": 107., "mumep": 97.}
 DIO_TAIL_START = 102.
 SPARSE_FRACTION = 0.75
 COSMIC_CR_RATIO = {True: 754., False: 471.}  # CRV-tagged / vetoed cosmic yield, e- / e+ tracks
+# RMC samples with the Mu2eEvtAna RMCPower variations (photon spectrum x(1-x)^n, n = 2 +- 0.5): the 0 neutron
+# knockout samples. The power is a shape-only uncertainty: its up/down templates keep each process's nominal yield in
+# every channel, so it is separate from the RMC rate
+RMC_POWER_SAMPLES = {"mumem": ("rmc_ext", "rmc_int"), "mumep": ("rmc_ext_0n", "rmc_int_0n")}
 
 
 class Region:
@@ -347,10 +356,10 @@ def new_model(args, name):
     return model
 
 
-def common_terms(model, channels, processes):
+def common_terms(args, model, channels, processes):
     """Rate uncertainties, the mcstat group, and frozen yield scale factors (set them with --setParameters, e.g.
     yieldScale=2 or scale_dio=0.5)."""
-    rate_uncertainties(model)
+    rate_uncertainties(model, rmc_floating=args.rmc_floating)
     for ch in channels:
         for p in processes:
             model.group("mcstat", f"mcstat_{ch}_{p}")
@@ -383,13 +392,19 @@ def define_model(args, samples, regions, data=None, envelope=True):
             if result is None:
                 continue
             shape, inputs[ch][comp] = result
+            if args.rmc_power != "off" and comp in RMC_POWER_SAMPLES[args.process]:
+                up, down = samples[comp].variation("RMCPower", region.selection)
+                shape.variations = mc.shapes.as_variations({"RMCPower": (mc.rebin_to(up, edges),
+                                                                         mc.rebin_to(down, edges), "shape_only")})
             channel.add(comp, shape, signal=comp == "signal", title=title(args.process, comp))
             processes.add(comp)
         if use_envelope:
             # the envelope absorbs every MC background; it is only used where the signal is fit
             channel.add("env", mc.Envelope(absorbs="*"), title=title(args.process, "env"))
             processes.add("env")
-    common_terms(model, regions, processes)
+    common_terms(args, model, regions, processes)
+    if args.rmc_power == "free":
+        model.unconstrained("RMCPower")
     return model, inputs
 
 
@@ -447,7 +462,7 @@ def narrowed_model(args, full, inputs, regions):
         if args.envelope and not region.is_control:
             channel.add("env", mc.Envelope(absorbs="*"), title=title(args.process, "env"))
             processes.add("env")
-    common_terms(model, full, processes)
+    common_terms(args, model, full, processes)
     return model, narrow_inputs
 
 
@@ -519,7 +534,7 @@ def counting_model(args, results, inputs, regions):
             processes.add(p)
         print(f"  {ch}: counting window {xlo:.2f}-{xhi:.2f} MeV/c, N(signal) = {signal[lo:hi].sum():.4f}, "
               f"N(background) = {bkg[lo:hi].sum():.4f}")
-    common_terms(model, results, processes)
+    common_terms(args, model, results, processes)
     return model, windows
 
 
@@ -534,7 +549,8 @@ def finish_cards(outdir, header):
     """Header comments (read by sensitivity_vs_livetime.py) and frozen yield scale factors in every card."""
     for card in glob.glob(os.path.join(outdir, "*.txt")):
         text = open(card).read()
-        params = re.findall(r"^(\S+) rateParam ", text, flags=re.M)
+        # only the yield scale factors are frozen; a fitted rate (rmcNorm) floats
+        params = re.findall(r"^(yieldScale|scale_\S+) rateParam ", text, flags=re.M)
         freeze = [f"nuisance edit freeze {p}" for p in dict.fromkeys(params)]
         with open(card, "w") as f:
             f.write("\n".join(header) + "\n" + text.rstrip("\n") + "\n" + "\n".join(freeze) + "\n")
@@ -569,6 +585,14 @@ def make_parser():
                              "for an envelope model")
     parser.add_argument("--mc-stat", action="store_true", help="MC statistical uncertainties of the yields")
     parser.add_argument("--poi-range", type=float, nargs=2, default=(-50., 50.), metavar=("LO", "HI"))
+    parser.add_argument("--charge-inverted-range", type=float, nargs=2, default=None, metavar=("LO", "HI"),
+                        help="momentum range of the charge-inverted control regions (default: 95-105 MeV/c for "
+                             "mumem, 87-97 for mumep)")
+    parser.add_argument("--rmc-power", default="auto", choices=("auto", "off", "constrained", "free"),
+                        help="the RMC photon spectrum power uncertainty (Mu2eEvtAna RMCPower, n = 2 +- 0.5, shape "
+                             "only) on the 0n RMC processes of every channel: none, a unit-Gaussian (constrained) or "
+                             "a flat (free) prior; auto (default): free with a charge-inverted control region, which "
+                             "measures it, and off otherwise")
     parser.add_argument("--range", type=float, nargs=2, default=None, metavar=("LO", "HI"),
                         help="restrict the signal-region channels to this momentum range (moved to the nearest bin "
                              "edges), keeping the full-range shapes of the MC processes")
@@ -599,6 +623,10 @@ def parse_args(argv=None):
     args.name = name
     args.output = args.output or os.path.join("models", name)
     args.selection_list, args.offsets = selections, offsets
+    # a charge-inverted (RMC) control region measures the RMC: its rate (rmcNorm) and spectrum power float
+    args.rmc_floating = any((x // 1000) & (CHARGE_INVERTED // 1000) for x in offsets + selections)
+    if args.rmc_power == "auto":
+        args.rmc_power = "free" if args.rmc_floating else "off"
     return args
 
 
@@ -618,6 +646,8 @@ def run(args):
     for s in args.selection_list:
         for sel in [s] + [s + o for o in args.offsets]:
             region = Region(args.process, sel)
+            if args.charge_inverted_range and region.charge_inverted:
+                region.xmin, region.xmax = args.charge_inverted_range
             regions[channel_name(region)] = region
 
     data = toy_data(args, samples, regions) if args.data.startswith("toy") else data_hists(args, samples, regions)

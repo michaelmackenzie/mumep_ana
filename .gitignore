@@ -35,3 +35,4 @@ studies/*/outputs
 *.diff
 *.swap
 analysis/combine/models
+analysis/combine/rmc_studies
