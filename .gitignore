@@ -34,3 +34,4 @@ studies/*/outputs
 *.save
 *.diff
 *.swap
+analysis/combine/models

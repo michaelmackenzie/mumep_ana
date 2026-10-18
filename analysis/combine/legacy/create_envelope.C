@@ -4,9 +4,9 @@
 
 #include <functional>
 
-#include "../defaults.C"
-#include "../tools/types.C"
-#include "../tools/families.C"
+#include "../../defaults.C"
+#include "../../tools/types.C"
+#include "../../tools/families.C"
 
 // Defaults for envelope construction
 bool useFrameChiSq_         = false; //use a roo plot frame to evaluate chi^2

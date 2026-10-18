@@ -113,32 +113,34 @@ root.exe -q -b 'make_plots.C(true, {75})'
 
 ## Making Combine models
 
-The Combine workflow has several steps:
-- Fit input histograms and extract PDFs
-- Combine the PDFs and rates into a total model
-- Create the Combine data cards/workspaces, merging cards for multiple categories if needed
-- Running the statistical tests
+The Combine models are built in Python with
+[mu2ecombine](https://github.com/michaelmackenzie/Mu2eEvtAna/tree/main/combine) (`Mu2eEvtAna/combine`): it fits the
+component shapes, builds the model of all selection sets and control regions, and writes the Combine cards. See
+[analysis/combine/README.md](analysis/combine/README.md) for the options.
 
-An example of the complete workflow:
+Set up the Combine environment (above), then add mu2ecombine to `PYTHONPATH`. A `Mu2eEvtAna` clone next to this
+repository is found automatically.
 ```bash
+export PYTHONPATH=/path/to/Mu2eEvtAna/combine:$PYTHONPATH
 cd analysis/combine/
 # Single category
-time ./full_loop.sh -p mumem -s "75" -t evt_r0100 --evt-ana --no-sys
-# Two exclusive categories
-time ./full_loop.sh -p mumem -s "77 78" -t evt_r0100 --evt-ana --no-sys
+time ./full_loop.py -p mumem -s "75"
+# Two exclusive categories, with the CRV-tagged control regions
+time ./full_loop.py -p mumem -s "77 78" -c "1000"
 ```
+The model is written to `models/<process>_<sets>[_cr<offset>...][_<tag>]/`.
 
 ## Statistical analysis
 
 Using Combine, many statistical tests can be performed.
 See https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit for detailed documentation on Combine.
+Each model directory has a `commands.sh` with common commands.
 
 An example evaluation:
 ```bash
-cd analysis/combine/
+cd analysis/combine/models/mumem_75
 
 # Extract approximate Asimov 90% CL CL_s upper limit
-CARD="datacards/combine_total_mumem_75_evt_r0100.txt"
 ARGS="-t -1 --rMin -100. --rMax 100. --cl 0.9 --cminDefaultMinimizerStrategy=0 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1 --rAbsAcc 0.0001 --rRelAcc 0.001"
-combine -d ${CARD} ${ARGS}
+combine -d combined.txt ${ARGS}
 ```

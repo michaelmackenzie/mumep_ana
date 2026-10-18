@@ -1,6 +1,6 @@
 #ifndef __CONVANA_ANALYSIS_SYSTEMATICS__
 #define __CONVANA_ANALYSIS_SYSTEMATICS__
-#include "../../stn/ana/ana/Systematics.hh"
+#include "../../../stn/ana/ana/Systematics.hh"
 #include "dio_fit.C"
 #include "cosmic_fit.C"
 #include "signal_fit.C"

@@ -14,7 +14,7 @@
 //            region sets) are still available to the model building
 //
 // The cut is applied on top of the set's selection, so it can only tighten it. Use the outputs with:
-//   CONVANA_HIST_PATH=<out_dir>[/<tag>] ./full_loop.sh --evt-ana ...
+//   ./build_model.py --hist-path <out_dir>[/<tag>] ... (or ./full_loop.py)
 //
 // Example:
 //   root.exe -q -b 'make_selection_hists.C("40", "trk_qual > 0.9", "selection_hists/qual_0p9")'

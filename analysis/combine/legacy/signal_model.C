@@ -1,11 +1,11 @@
 #ifndef __CONVANA_ANALYSIS_SIGNALMODEL__
 #define __CONVANA_ANALYSIS_SIGNALMODEL__
 
-#include "../tools/types.C"
-#include "../defaults.C"
-#include "../physics.C"
-#include "../datasets.C"
-#include "../tools/utilities.C"
+#include "../../tools/types.C"
+#include "../../defaults.C"
+#include "../../physics.C"
+#include "../../datasets.C"
+#include "../../tools/utilities.C"
 #include "model_io_utils.C"
 #include "combine/HiggsAnalysis/CombinedLimit/src/RooLandauCB.cc"
 #include "RooTFnBinding.h"

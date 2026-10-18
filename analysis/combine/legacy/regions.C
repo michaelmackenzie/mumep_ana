@@ -8,7 +8,7 @@
 #ifndef __CONVANA_ANALYSIS_REGIONS__
 #define __CONVANA_ANALYSIS_REGIONS__
 
-#include "../defaults.C"
+#include "../../defaults.C"
 
 // Control region flag offsets. perform_fits.sh and full_loop.sh use the same convention.
 const int crv_inverted_offset_    = 1000;

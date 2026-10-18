@@ -1,12 +1,12 @@
 // Build the statistical model
 
-#include "../tools/types.C"
+#include "../../tools/types.C"
 #include "signal_model.C"
 #include "background_model.C"
-#include "../physics.C"
+#include "../../physics.C"
 #include "systematics.C"
 #include "create_envelope.C"
-#include "../tools/write_datacard.C"
+#include "../../tools/write_datacard.C"
 // #include "combine/HiggsAnalysis/CombinedLimit/src/RooLandauCB.cc"
 
 bool print_           = true;

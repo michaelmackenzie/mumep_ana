@@ -55,7 +55,7 @@ if [[ "${SKIPFITS}" == "" ]]; then
 fi
 FILE="${OUTDIR}/fitDiagnostics.${TAG}_Single_B.root"
 if [ -f ${FILE} ]; then
-    root.exe -q -b "../tools/plot_combine_fit.C(\"${FILE}\", \"${FIGDIR}/${TAG}_Single_B\")"
+    root.exe -q -b "../../tools/plot_combine_fit.C(\"${FILE}\", \"${FIGDIR}/${TAG}_Single_B\")"
 else
     echo "File ${FILE} not found!"
 fi
@@ -69,7 +69,7 @@ if [[ "${SKIPFITS}" == "" ]]; then
 fi
 FILE="${OUTDIR}/fitDiagnostics.${TAG}_Single_S.root"
 if [ -f ${FILE} ]; then
-    root.exe -q -b "../tools/plot_combine_fit.C(\"${FILE}\", \"${FIGDIR}/${TAG}_Single_S\")"
+    root.exe -q -b "../../tools/plot_combine_fit.C(\"${FILE}\", \"${FIGDIR}/${TAG}_Single_S\")"
 else
     echo "File ${FILE} not found!"
 fi
@@ -87,7 +87,7 @@ if [[ "${SKIPFITS}" == "" ]]; then
 fi
 FILE="${OUTDIR}/fitDiagnostics.${TAG}_B.root"
 if [ -f ${FILE} ]; then
-    root.exe -q -b "../tools/plot_combine_fits.C(\"${FILE}\", 0., \"${FIGDIR}/${TAG}_B\")"
+    root.exe -q -b "../../tools/plot_combine_fits.C(\"${FILE}\", 0., \"${FIGDIR}/${TAG}_B\")"
 else
     echo "File ${FILE} not found!"
 fi
@@ -101,7 +101,7 @@ if [[ "${SKIPFITS}" == "" ]]; then
 fi
 FILE="${OUTDIR}/fitDiagnostics.${TAG}_S.root"
 if [ -f ${FILE} ]; then
-    root.exe -q -b "../tools/plot_combine_fits.C(\"${FILE}\", 5., \"${FIGDIR}/${TAG}_S\")"
+    root.exe -q -b "../../tools/plot_combine_fits.C(\"${FILE}\", 5., \"${FIGDIR}/${TAG}_S\")"
 else
     echo "File ${FILE} not found!"
 fi

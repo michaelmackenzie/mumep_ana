@@ -1,12 +1,16 @@
+#! /usr/bin/env python3
 """Likelihood scans of the signal strength for a background envelope, and their overlay.
 
 For a card whose background is a discretely profiled envelope (RooMultiPdf), scan r with each
 envelope function held fixed, then with the function index profiled, and plot the curves together:
 the profiled curve has to follow the lowest single-function curve at every point.
 
+The card is a model written by build_model.py --envelope (the envelope is the RooMultiPdf of a channel workspace,
+profiled over its <channel>_env_cat index).
+
 Example:
-  python3 envelope_scans.py datacards/combine_mumep_40_evt_r0104_env.txt -r 200
-  python3 envelope_scans.py datacards/combine_mumep_40_evt_r0104_env.txt --plot-only
+  ./envelope_scans.py models/mumep_40_env/combined.txt -r 200
+  ./envelope_scans.py models/mumep_40_env/combined.txt --plot-only
 """
 import argparse
 import os
@@ -36,58 +40,54 @@ BASE_FIT_ARGS = ['--cminDefaultMinimizerStrategy=1', '--cminApproxPreFitToleranc
 
 def card_base_name(card):
     base = os.path.splitext(os.path.basename(card))[0]
-    return base[len('combine_'):] if base.startswith('combine_') else base
-
-
-def default_index(card):
-    """Envelope index from the card name: build_model names it <process>_<selection>_env_cat"""
-    match = re.search(r'(mumem|mumep)_(\d+)', os.path.basename(card))
-    return f'{match.group(1)}_{match.group(2)}_env_cat' if match else None
+    if base == 'combined':  # models/<name>/combined.txt, as written by build_model.py
+        return os.path.basename(os.path.dirname(os.path.abspath(card)))
+    return base
 
 
 def card_contents(card):
-    """Discrete parameters, the workspace file, and the observable of the card"""
-    discrete, ws_file, obs = [], None, None
+    """Discrete parameters of the card, and the shape files (relative to the card) with their workspace names"""
+    discrete, files = [], []
+    card_dir = os.path.dirname(os.path.abspath(card))
     with open(card) as f:
         for line in f:
             tokens = line.split()
             if len(tokens) == 2 and tokens[1] == 'discrete':
                 discrete.append(tokens[0])
-            if len(tokens) >= 4 and tokens[0] == 'shapes' and tokens[1] == '*' and ws_file is None:
-                obs, ws_file = tokens[2], tokens[3]
-    # the workspace path is relative to the working directory, the card, or the directory above it
-    if ws_file and not os.path.isabs(ws_file) and not os.path.exists(ws_file):
-        card_dir = os.path.dirname(os.path.abspath(card))
-        for alt in [os.path.join(card_dir, ws_file), os.path.join(os.path.dirname(card_dir), ws_file)]:
-            if os.path.exists(alt):
-                ws_file = alt
-                break
-    return discrete, ws_file, obs
+            if len(tokens) >= 5 and tokens[0] == 'shapes' and ':' in tokens[4]:
+                path = os.path.join(card_dir, tokens[3])
+                entry = (path, tokens[4].split(':')[0])
+                if entry not in files:
+                    files.append(entry)
+    return discrete, files
 
 
-def envelope_functions(ws_file, index, obs_name):
-    """Names of the envelope functions selected by the index, in index order, and the floating
-    parameters of each"""
+def envelope_functions(files, index):
+    """Titles of the envelope functions selected by the index, in index order, and the floating parameters of each"""
     import ROOT
     ROOT.gROOT.SetBatch(True)
     ROOT.gSystem.Load('libHiggsAnalysisCombinedLimit')
-    f = ROOT.TFile.Open(ws_file)
-    ws = f.Get('workspace') if f else None
-    cat = ws.cat(index) if ws else None
-    if not cat:
-        return None
-    names, params = None, None
-    for pdf in ws.allPdfs():
-        if pdf.InheritsFrom('RooMultiPdf') and pdf.dependsOn(cat):
-            names = [pdf.getPdf(i).GetName() for i in range(pdf.getNumPdfs())]
-            observables = ROOT.RooArgSet(ws.var(obs_name)) if obs_name and ws.var(obs_name) else ROOT.RooArgSet()
-            params = []
-            for i in range(pdf.getNumPdfs()):
-                pars = pdf.getPdf(i).getParameters(observables)
-                params.append([p.GetName() for p in pars if p.InheritsFrom('RooRealVar') and not p.isConstant()])
-            break
-    f.Close()
-    return names, params
+    for path, ws_name in files:
+        f = ROOT.TFile.Open(path)
+        ws = f.Get(ws_name) if f else None
+        cat = ws.cat(index) if ws else None
+        if not cat:
+            if f:
+                f.Close()
+            continue
+        observables = ROOT.RooArgSet()
+        for data in ws.allData():
+            observables.add(data.get())
+        for pdf in ws.allPdfs():
+            if pdf.InheritsFrom('RooMultiPdf') and pdf.dependsOn(cat):
+                pdfs = [pdf.getPdf(i) for i in range(pdf.getNumPdfs())]
+                names = [p.GetTitle() or p.GetName() for p in pdfs]
+                params = [[v.GetName() for v in p.getParameters(observables)
+                           if v.InheritsFrom('RooRealVar') and not v.isConstant()] for p in pdfs]
+                f.Close()
+                return names, params
+        f.Close()
+    return None, None
 
 
 def scan_file(tag, label):
@@ -204,9 +204,9 @@ def summarize(labels, scans, total, nll_min):
 
 
 parser = argparse.ArgumentParser(description='Likelihood scans of r for each envelope function and with the index profiled')
-parser.add_argument('card', help='Combine card with a discretely profiled envelope (e.g. datacards/combine_mumep_40_evt_r0104_env.txt)')
+parser.add_argument('card', help='Combine card with a discretely profiled envelope (e.g. models/mumep_40_env/combined.txt)')
 parser.add_argument('-i', '--index', default=None,
-                    help='Envelope index parameter (default: <process>_<selection>_env_cat from the card name)')
+                    help="Envelope index parameter (default: the card's discrete parameter, if it has one)")
 parser.add_argument('-n', '--npdfs', type=int, default=None,
                     help='Number of envelope functions (default: read from the workspace)')
 parser.add_argument('-r', '--range', type=float, default=100., help='Scan r in [-range, range] (default: %(default)s)')
@@ -226,16 +226,14 @@ card_base = card_base_name(args.card)
 tag = args.tag or f'envelope_{card_base}'
 figure = args.figure or f'envelope_{card_base}.png'
 
-discrete, ws_file, obs_name = card_contents(args.card)
-index = args.index or default_index(args.card)
+discrete, shape_files = card_contents(args.card)
+index = args.index or (discrete[0] if len(discrete) == 1 else None)
 if not index:
-    parser.error('no envelope index in the card name, pass it with --index')
-if discrete and index not in discrete:
+    parser.error(f'the card has {len(discrete)} discrete parameters ({", ".join(discrete) or "none"}), pass one with --index')
+if index not in discrete:
     parser.error(f'index {index} is not a discrete parameter of the card ({", ".join(discrete)}), pass it with --index')
 
-labels, function_params = None, None
-if ws_file and os.path.exists(ws_file):
-    labels, function_params = envelope_functions(ws_file, index, obs_name)
+labels, function_params = envelope_functions(shape_files, index)
 npdfs = args.npdfs or (len(labels) if labels else None)
 if not npdfs:
     parser.error('could not read the envelope functions from the workspace, pass their number with --npdfs')

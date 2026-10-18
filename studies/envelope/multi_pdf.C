@@ -45,7 +45,7 @@ int count_pdf_params(RooAbsPdf* pdf) {
   return nparams;
 }
 
-#include "../../analysis/combine/create_envelope.C"
+#include "../../analysis/combine/legacy/create_envelope.C"
 
 int multi_pdf() {
   const double xmin = 85.;

@@ -97,4 +97,4 @@ if [[ ! -f "$FIT_RESULT_FILE" ]]; then
 fi
 
 echo "Fit results saved in $FIT_RESULT_FILE"
-root.exe -q -b -l '../tools/plot_combine_fits.C("'$FIT_RESULT_FILE'", 0., "'$TAG'")'
+root.exe -q -b -l '../../tools/plot_combine_fits.C("'$FIT_RESULT_FILE'", 0., "'$TAG'")'

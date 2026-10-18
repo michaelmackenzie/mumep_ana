@@ -1,8 +1,8 @@
 #ifndef __CONVANA_ANALYSIS_MODEL_IO_UTILS__
 #define __CONVANA_ANALYSIS_MODEL_IO_UTILS__
 
-#include "../defaults.C"
-#include "../datasets.C"
+#include "../../defaults.C"
+#include "../../datasets.C"
 
 //---------------------------------------------------------------------------------------------------------------------------
 // Optional alternate histogram files, keyed by dataset key. An entry under the key "" is used for

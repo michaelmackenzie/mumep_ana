@@ -1,29 +1,242 @@
 # Combine Fit Workflow (mumep_ana)
 
-This directory contains fit and model-building macros used to produce workspaces and datacards for statistical analysis.
+The Combine models are built in Python with mu2ecombine (`Mu2eEvtAna/combine`, see its README): the component shapes
+are fit, the model of all selection sets and control regions is assembled, and Combine cards are written. Combine
+does the statistics.
 
 ## Organization
 
-- `model_io_utils.C`
-  - Shared histogram I/O and normalization-tree scaling helpers.
-  - Supports loading shapes from one set or merged control-region set lists.
-- `fit_workspace_utils.C`
-  - Shared fit orchestration helpers.
-  - PDF selection (`default/auto/hist/uniform/poly/polyN/cb/analytic`).
-  - Shared right-tail smoothing (`exp/power/convolution/none`).
-- `*_fit.C`
-  - Component-specific fits that now call shared fit/model helpers.
-- `background_model.C`, `signal_model.C`
-  - Shared model assembly and workspace-reading helpers.
-- `create_envelope.C`
-  - Data-driven background envelope: fits function families to the data sidebands and packs the
-    surviving functions into a `RooMultiPdf` that Combine profiles over.
-- `perform_fits.sh`
-  - Executes per-component fits for a selection.
-- `full_loop.sh`
-  - End-to-end: perform fits, build model, merge cards, run combine.
+- `samples.py`: the Mu2eEvtAna (EventNtuple) datasets, their rates (as in `../datasets.C` and `../physics.C`), the
+  exposures (Run 1A at 1BB or 2BB, Run 2, MDS3c/d), and the rate uncertainties.
+- `build_model.py`: builds and writes one model, the shape model and the cut-and-count model.
+- `full_loop.py`: builds the model and optionally tests it with Combine.
+- `selection_test.py`: sensitivity test of a tightened selection (with `make_selection_hists.C`).
+- `sensitivity_vs_fit_range.py`: expected sensitivity vs. the momentum fit range.
+- `envelope_scans.py`: likelihood scans of r for each envelope function and with the index profiled.
+- `sensitivity_vs_livetime.py`: expected sensitivity vs. a livetime scale factor.
 
-## Background Envelope (mumep)
+## Setup
+
+Set up Combine as in the top-level README (`pyenv rootana`, `env_standalone_mu2e.sh`). mu2ecombine is taken from
+`PYTHONPATH`, `MU2ECOMBINE_DIR`, or a `Mu2eEvtAna` clone next to this repository:
+
+```bash
+export PYTHONPATH=/path/to/Mu2eEvtAna/combine:$PYTHONPATH
+```
+
+## Building a model
+
+```bash
+./full_loop.py -p mumep -s "40" -t v1                        # template model of set 40
+./full_loop.py -p mumep -s "40" -t v1_env --envelope --plots # data-driven envelope background
+./full_loop.py -p mumem -s "75" -c "1000 2000 4000"           # with control regions
+./full_loop.py -p mumep -s "40" --2bb --test-combine          # 2BB exposure, then limits and a fit
+```
+
+`full_loop.py` takes the `build_model.py` options (`./build_model.py -h`) plus `--test-combine` (text2workspace, the
+expected 90% CL limit, FitDiagnostics, and pre/post-fit figures), `--fit-args`, `--skip-model`, and `--dry-run`
+(print the Combine commands).
+
+The output, `models/<process>_<sets>[_cr<offset>...][_<tag>]/` (or `-o`):
+
+| File | Content |
+|---|---|
+| `combined.txt`, `<channel>.txt` | Datacards of all channels / one channel; paths are relative to the card |
+| `shapes/<channel>.root` | The workspace `w`: observable `obs_<set>`, templates as RooDataHist, PDFs, data |
+| `model.json` | Yields, MC uncertainties, nuisances, fit results, and envelope choices |
+| `commands.sh` | text2workspace and common Combine commands |
+| `figures/` | Expected stacks and the MC shape fits (`--plots`) |
+| `cc/` | The cut-and-count model, in the same layout |
+
+Every channel is a RooWorkspace on its observable `obs_<set>` (mu2ecombine `Model(..., workspace=True)`), also when
+all its processes are templates. Any model of the same channels can therefore generate data that another one fits,
+e.g. `combine -M GenerateOnly --saveToys` with a template model and `--toysFile` with an envelope or function model.
+
+The card headers record the signal reference branching fraction (the unit of `r`), N(POT), livetime, N(muons), and
+the signal efficiency of each channel.
+
+### Channels and control regions
+
+Each selection set `S` is the channel `set_S`. `-c "1000 2000 4000"` adds, for each set and offset `O`, the channel
+`crO_S` from set `S + O`. The offsets are the region flags of `Mu2eEvtAna/src/ConvAna.cc`, and they combine (e.g. 3000
+is CRV-tagged and time-inverted):
+
+- 1000: inverted CRV veto (CRV-tagged tracks), mainly constraining cosmics (`csmN`)
+- 2000: inverted time cut; for set 75 the early time region (t0 <= 540 ns), for sets 20/40 t0 outside 475-1650 ns,
+  mainly constraining the prompt backgrounds (`rpcN`, `pbrN`)
+- 4000: charge-inverted tracks (e+ for `mumem`, e- for `mumep`), constraining RMC
+
+Process and nuisance names are shared by all channels, so the control regions constrain them in the joint fit. The
+CRV-tagged and time-inverted regions keep the signal region's model, including the signal that leaks into them. A
+charge-inverted region has no signal, gets DIO only for e- tracks, and models both RMC sources. The momentum ranges
+are 100-110 (mumem), 87-97 (mumep), and 95-105 MeV/c (mumem charge-inverted), in 0.2 MeV/c bins.
+
+### Process shapes
+
+| Process | Shape |
+|---|---|
+| signal | The MC histogram (`--functions`: a double-sided Crystal Ball fit) |
+| dio | The MC histogram; above 102 MeV/c the generated spectrum (set 10) convolved with the momentum response |
+| cosmic | Chebychev (2 coefficients) fit to the set plus its CRV-tagged version (set + 1000); rate from the set |
+| pbar, rpc_ext / rpc_int | Chebychev fits, 1 / 2 coefficients |
+| rmc (mumep) | 0n: Gaussian + linear polynomial; 1n: exp(quadratic), i.e. a broad Gaussian |
+| rmc (mumem) | Turn-on x power law x exponential: (p - x0)^a (120 - p)^b exp(-l p), x0 = 96 (94 charge-inverted) |
+
+- A non-RMC background filling less than 75% of the bins of its histogram is modeled as uniform.
+- The fitted shapes are binned templates by default (`Fit(..., binned=True)`). With `--functions`
+  (`CONVANA_HIST_PDFS=0`), the fitted PDFs enter a RooWorkspace instead.
+- Processes with no simulated events in the range are left out.
+- mumep splits each RMC source into its 0 and 1 neutron knockout samples; mumem uses the 0n sample.
+- Overrides from the environment: `FIT_PDF_TYPE[_<COMP>]` (`auto`, `analytic` (no uniform fallback), `hist`,
+  `uniform`, `polyN`, `cb`), `FIT_TAIL_MODEL[_DIO]` (`convolution` or `none`), `FIT_SHAPE_SETS[_<COMP>]` (sets whose
+  histograms give the shape; the rate stays the set's), and `FIT_CONTROL_SETS[_COSMIC]`. `<COMP>` is `SIGNAL`, `DIO`,
+  `COSMIC`, `RPC_EXT`, `RPC_INT`, `PBAR`, `RMC_EXT`, `RMC_INT`, or `RMC_EXT_0N` ... `RMC_INT_1N` for mumep.
+
+### Background envelope
+
+`--envelope` (`CONVANA_USE_ENV=1`) replaces the MC backgrounds of each signal-region channel by a data-driven
+envelope: function families fit to the data outside the blind window (90-93 MeV/c for mumep, 102-105.5 for mumem) and
+profiled discretely by Combine (`RooMultiPdf`, index `<channel>_env_cat`). The families and the chi^2/F-test
+selection are mu2ecombine's defaults, which follow the configuration of `legacy/create_envelope.C` described below. Control
+regions keep the MC backgrounds. Building the envelope takes a few minutes.
+
+### Data
+
+`--data` selects `data_obs`:
+
+- `asimov` (default): the expected backgrounds.
+- `toy[:seed]`: the expected backgrounds (MC, without an envelope), Poisson-fluctuated per bin.
+- `mds3c`, `mds3d`: the MDS ensembles, with their exposure and a 1e-13 signal reference.
+- `<file>:<histogram>`: any histogram; `{set}` in the name is replaced by each channel's set.
+- `--data-model <model dir>`: the data of another model, e.g. an envelope model fit to the Asimov data of a template
+  model.
+
+### Normalization and uncertainties
+
+- `--exposure` (`run1a`, `run2`, `mds3c`, `mds3d`) and `--2bb` (`CONVANA_USE_2BB=1`: the inputs re-weighted to 2BB,
+  `ConvAna.*.m2.root`, at the 2BB duty cycle and N(POT) per microbunch). The signal is normalized to `--reference`
+  (default 1e-15).
+- Rate uncertainties (`lumi`, `csmN`, `dioN`, `rpcN`, `pbrN`, `rmcN`, `intN`): lnN, correlated across all channels,
+  in the nuisance group `rate`.
+- `--mc-stat`: the MC statistical uncertainty of each process yield, `mcstat_<channel>_<process>` (group `mcstat`).
+- Yield scale factors, frozen at 1: `yieldScale` for all processes and `scale_<process>`. Set them when running
+  Combine, e.g. `--setParameters scale_dio=2,scale_cosmic=0.5` or `yieldScale=2`.
+
+### Cut-and-count model
+
+`cc/` holds a one-bin model per channel: the momentum window maximizing S/sqrt(S + B) in a signal region, the full
+range in a control region, with the shape model's expected yields (an envelope enters at its expected yield, fixed).
+The window is recorded in the card header. `--no-cc` skips it.
+
+## Selection tests
+
+`selection_test.py` runs a full sensitivity test of a selection:
+
+```bash
+./selection_test.py "trk_t0 > 540" t0_540 -s "40"
+```
+
+1. `make_selection_hists.C` writes the histograms to `test_hists/<tag>/` (see below).
+2. `build_model.py` builds a template model (`<tag>_hists`) and an envelope model (`<tag>_env`, `--envelope
+   --functions`) whose data is the template model's Asimov data set (`--data-model`).
+3. The limit of the envelope model on that data set (its observed limit) is the sensitivity estimate, and does not
+   depend on which envelope function is the default. The template model's own Asimov limit is the reference.
+
+The limits are written to `test_hists/<tag>/summary.txt`, with the logs in `logs/` and the Combine outputs in
+`combine/`. Use `-p`/`-s`/`-c` for other processes, sets, and control regions, `--model-args` and `--fit-args` to pass
+options to `build_model.py` and Combine, and `--skip-hists`/`--skip-models` to reuse earlier steps.
+
+## Sensitivity vs. fit range
+
+`sensitivity_vs_fit_range.py` scans the Asimov expected 90% CL limit over momentum fit ranges. It takes the
+`build_model.py` options of the model (process, sets, `--envelope`, ...):
+
+```bash
+./sensitivity_vs_fit_range.py -p mumem -s 75 --low-edges "100 101 102 103" --high-edges "105 110" --jobs 4
+```
+
+- Each range gets a model from `build_model.py --range LO HI`: the signal-region channels are restricted to the range,
+  and each MC process is the full-range model's expectation in the bins inside it (the full-range shapes, with the
+  per-bin MC uncertainties of the inputs), so only the range changes between points. Control-region channels keep
+  their range.
+- An envelope (`--envelope`) is refit to the data inside each range, so its functions and their selection follow the
+  range; this takes a few minutes per range.
+- Range edges are moved to the nearest bin edges. The rate uncertainties stay as they are.
+- Defaults: lower edges from the range minimum to its midpoint in `--step` (0.5 MeV/c) steps, the upper edge at the
+  range maximum. Outputs go to `range_scans/<model name>/`: a model directory per range, logs,
+  `sensitivity_vs_fit_range.csv`, and the figures:
+  - `sensitivity_vs_fit_range.png`: median expected limit vs. the lower edge, one curve per upper edge (up to 6), with
+    the +-1/2 sigma bands for a single curve
+  - `sensitivity_vs_fit_range_2d.png`: median expected limit vs. (lower edge, upper edge), with the best range
+    outlined, when at least two lower and two upper edges were scanned
+- The median expected limit is the observed limit on the Asimov data set (`-t -1`); the +-1/2 sigma bands are the
+  expected quantiles. A range whose Asimov limit differs from the expected median by more than 5% is flagged
+  (`asimov mismatch`) and left out of the figures: a profiled fit missed the global minimum.
+- The fits use minimizer strategy 1 and `--noFitAsimov` (see the comments in the script). `--fit-args` adds Combine
+  arguments, `--jobs` runs ranges in parallel (one core each, at most 20), `--no-combine` builds the models and prints
+  the Combine commands, and `--plot-only` remakes the figures from the table of an earlier scan.
+
+## Envelope likelihood scans
+
+`envelope_scans.py` scans r for each envelope function with the index frozen, then with the index profiled, and
+overlays the curves as -2 Delta ln L:
+
+```bash
+./envelope_scans.py models/mumep_40_env/combined.txt -r 200 [--fit-args "..."]
+```
+
+- The index is the card's discrete parameter (`<channel>_env_cat`; `--index` for a card with several), and the
+  functions and their titles are read from the channel workspace.
+- `--fit-args` adds Combine arguments to every fit; `--plot-only` remakes the figure from existing scans; `--dry-run`
+  prints the Combine commands. The Combine outputs and the figure `envelope_<model name>.png` are written to the
+  working directory.
+- Combine stores plain NLL values, so the curves are 2(nll0 + nll + deltaNLL - minimum), with the 68% and 95% CL levels
+  at 1 and 4. The profiled scan saves the chosen index at each point, and the script checks that it follows the lowest
+  single-function curve.
+- The fits do not use `MINIMIZER_multiMin_maskConstraints`: masking the constraints in the loop over the functions
+  leaves an NLL offset that accumulates over the points of the profiled scan.
+
+## Sensitivity vs. livetime
+
+`sensitivity_vs_livetime.py` scales all yields with the frozen `yieldScale` factor, generates a background-only
+Asimov data set with the generation card at each scale, and fits it with the fit card:
+
+```bash
+python3 sensitivity_vs_livetime.py models/mumep_40_env/combined.txt --gen-card models/mumep_40_hists/combined.txt
+```
+
+## Selection Variations
+
+`make_selection_hists.C` writes dataset histogram files for a tightened selection, for fast
+selection sensitivity tests without reprocessing the EventNtuples (EventNtuple inputs only):
+
+```bash
+root.exe -q -b 'make_selection_hists.C("40", "trk_qual > 0.9 && trk_pid > 0.95", "selection_hists/qual_pid")'
+./full_loop.py -p mumep -s "40" -t qual_pid --hist-path selection_hists/qual_pid
+```
+
+- The model inputs of each requested set (`obs`, `t0`, and a few track variables) are re-filled from
+  the set's selection tree, `Ana/Hist/trs_<set>/tree`, for tracks passing the extra cut, with the
+  binning of the original histograms. The cut uses the tree branch names (`trk_p`, `trk_t0`,
+  `trk_qual`, `trk_pid`, `trk_d0`, `trk_rmax`, ...) and can only tighten the set's selection. Only
+  sets with a selection tree can be re-filled (e.g. 40, 75, 81, and their control-region sets 1040,
+  2040, ...), so pass the control-region sets too when the model uses them (`"40 1040 2040"`).
+- The output files keep the input names and layout, with the `Norm` tree for the normalization, and
+  `obs`/`t0` of all other sets copied unchanged, so shape and control-region sets still resolve.
+  `--hist-path` (or `CONVANA_HIST_PATH`) points the model building at them in place of the default histogram directory.
+- Several variations are made in one pass over the trees with a cut file, one `<tag> : <cut>` per
+  line, each written to `<out_dir>/<tag>/`:
+  `root.exe -q -b 'make_selection_hists.C("40", "cuts.txt", "selection_hists")'`
+- With no cut, the outputs reproduce the original `obs` and `t0` histograms exactly.
+
+## Macro-based model (legacy/)
+
+The previous workflow, ROOT macros (`*_fit.C`, `build_model.C`, `create_envelope.C`, `narrow_model.C`, ...) driven by
+`full_loop.sh`, `perform_fits.sh`, and `selection_test.sh`, is kept in `legacy/` for now, together with the versions
+of the scan tools that read its outputs. Run them from `legacy/`: they write their cards to `datacards/` and
+workspaces to `workspaces/` in the working directory. The sections below describe them.
+
+### Background Envelope (mumep)
 
 With `use_env_ = true` in `defaults.C`, `build_model.C` replaces the mumep background model with a
 data-driven envelope:
@@ -42,7 +255,7 @@ data-driven envelope:
   by the `_norm` variable), carries no rate uncertainties, and the discrete index is declared with
   a `<index> discrete` line.
 
-### Function families
+#### Function families
 
 Each family is scanned over a range of orders by `add_family`, and the orders that pass are added to
 the envelope. Which families are considered is set by the flags at the top of `create_envelope.C`:
@@ -106,7 +319,7 @@ The Gaussian + polynomial/exponential/power law families are `RooGenericPdf`s th
 normalization on every likelihood call, which makes them far slower to fit than the analytic
 families; the broad Gaussian is a `RooGaussian` with an analytic normalization.
 
-### Output
+#### Output
 
 `build_background_envelope` writes `<figdir>/<process>_<selection>_env_functions.png` (and a `_log`
 version) showing every accepted function against the data it was fit to, with the blinded region
@@ -118,7 +331,7 @@ directory stay meaningful. The MC templates of the backgrounds the envelope abso
 `mc_templates/` at their expected yields, with their raw/normalized/smoothed histograms in
 `workflow/`.
 
-## Envelope Likelihood Scans
+### Envelope Likelihood Scans
 
 `envelope_scans.py` (or the `envelope_scans.sh` wrapper) scans r for each envelope function with
 the index frozen, then with the index profiled, and overlays the curves as -2 Delta ln L:
@@ -138,7 +351,7 @@ python3 envelope_scans.py datacards/combine_mumep_40_evt_r0104_env.txt -r 200 [-
 - The fits do not use `MINIMIZER_multiMin_maskConstraints`: masking the constraints in the loop over
   the functions leaves an NLL offset that accumulates over the points of the profiled scan.
 
-## Control-Region Set Lists
+### Control-Region Set Lists
 
 Component fits can merge shape inputs from multiple control-region sets.
 
@@ -147,51 +360,7 @@ Component fits can merge shape inputs from multiple control-region sets.
 
 If not provided, `cosmic_fit` defaults to `{selection + 1000}`.
 
-## Combine Control Regions
-
-Unlike the set lists above, which only feed the component shape fits, a Combine control region is
-an extra channel in the merged card. Its processes and nuisances (`rmcN`, `lumi`, ...) share
-names with the signal region, so the control region constrains them in the joint fit.
-
-- `./full_loop.sh ... --control-regions "1000 2000 4000"` adds, for each selection `S` and offset
-  `O`, the channel `crO_S` built from set `S + O`. The offsets are the region flags of
-  `Mu2eEvtAna/src/ConvAna.cc`, and they combine (e.g. 3000 is CRV-tagged and time-inverted):
-  - 1000: inverted CRV veto (CRV-tagged tracks), mainly constraining cosmics (`csmN`)
-  - 2000: inverted time cut; for set 75 the early time region (t0 <= 540 ns), for sets 20/40
-    t0 outside 475-1650 ns, mainly constraining the prompt backgrounds (`rpcN`, `pbrN`)
-  - 4000: charge-inverted tracks (e+ for `mumem`, e- for `mumep`), constraining RMC
-- `regions.C` defines the regions. The CRV-tagged and time-inverted regions keep the signal
-  region's model, including the signal that leaks into them. A charge-inverted region has no
-  signal, gets DIO only for e- tracks, and always models both RMC sources; `perform_fits.sh`
-  skips the signal and systematics fits there.
-- The cosmic shape fit adds the CRV-tagged version of a set (`S + 1000`) to its input unless the
-  set already is CRV-tagged.
-- 2D (p, t0) fits are not available for time-inverted regions.
-- The momentum windows are set separately per process in `defaults.C`: `xmin_ci_em_`/`xmax_ci_em_`
-  (mumem control region) and `xmin_ci_ep_`/`xmax_ci_ep_` (mumep control region).
-
-## Data Card Systematics
-
-`tools/write_datacard.C` writes the systematics of the shape and counting cards:
-
-- Rate uncertainties (`lumi`, `csmN`, `dioN`, `rpcN`, `pbrN`, `rmcN`, `intN`): lnN, named without
-  the selection, so they are correlated across all channels of a merged card.
-- Shape uncertainties: `shape` lines in the shape card. The counting card carries their
-  normalization effect as asymmetric lnN.
-- MC statistical uncertainties, off by default (`./full_loop.sh ... --mc-stat`, or the
-  `include_mc_stat` argument of `build_model`): one lnN per process and channel,
-  `<process>_<selection>_<component>_mcstat`, from the bin errors of the process's input histogram.
-  Only processes whose PDF is the MC histogram itself get one. A fit or smoothed shape has none;
-  the component fit records which kind it saved as `<process>_<selection>_<component>_mc_template`
-  in its workspace, and workspaces from before this flag count as fit/smoothed.
-- Nuisance groups `rate`, `mcstat`, and `shape`, e.g. for `--freezeNuisanceGroups` or impact
-  breakdowns.
-- Yield scale factors, frozen at 1: `yieldScale` for all processes, and `scale_<process>` for each
-  process in the card (e.g. `scale_dio`, `scale_rmc_ext_0n`), named without the selection so they
-  scale the process in every channel of a merged card. Set them when running Combine to scale the
-  nominal yields, e.g. `--setParameters scale_dio=2,scale_cosmic=0.5`.
-
-## Sensitivity vs. Fit Range
+### Sensitivity vs. Fit Range
 
 `sensitivity_vs_fit_range.py` scans the Asimov expected 90% CL limit of one set over momentum fit
 ranges, starting from the per-set shape card `build_model` writes for the full range:
@@ -235,95 +404,3 @@ python3 sensitivity_vs_fit_range.py datacards/combine_mumem_75_<tag>.txt \
 - `--no-combine` builds the models and prints the Combine commands only. `--plot-only` remakes the
   figures from the `sensitivity_vs_fit_range.csv` of an earlier scan, without ROOT or Combine; for a
   table from before the `median` column, it reads the Asimov limits from the scan's Combine logs.
-
-## Selection Variations
-
-`make_selection_hists.C` writes dataset histogram files for a tightened selection, for fast
-selection sensitivity tests without reprocessing the EventNtuples (EventNtuple inputs only):
-
-```bash
-root.exe -q -b 'make_selection_hists.C("40", "trk_qual > 0.9 && trk_pid > 0.95", "selection_hists/qual_pid")'
-CONVANA_HIST_PATH=selection_hists/qual_pid ./full_loop.sh --evt-ana -p mumep -s "40" -t qual_pid
-```
-
-- The model inputs of each requested set (`obs`, `t0`, and a few track variables) are re-filled from
-  the set's selection tree, `Ana/Hist/trs_<set>/tree`, for tracks passing the extra cut, with the
-  binning of the original histograms. The cut uses the tree branch names (`trk_p`, `trk_t0`,
-  `trk_qual`, `trk_pid`, `trk_d0`, `trk_rmax`, ...) and can only tighten the set's selection. Only
-  sets with a selection tree can be re-filled (e.g. 40, 75, 81, and their control-region sets 1040,
-  2040, ...), so pass the control-region sets too when the model uses them (`"40 1040 2040"`).
-- The output files keep the input names and layout, with the `Norm` tree for the normalization, and
-  `obs`/`t0` of all other sets copied unchanged, so shape and control-region sets still resolve.
-  `CONVANA_HIST_PATH` points the model building at them in place of the default histogram directory.
-- Several variations are made in one pass over the trees with a cut file, one `<tag> : <cut>` per
-  line, each written to `<out_dir>/<tag>/`:
-  `root.exe -q -b 'make_selection_hists.C("40", "cuts.txt", "selection_hists")'`
-- With no cut, the outputs reproduce the original `obs` and `t0` histograms exactly.
-
-`selection_test.sh` runs a full sensitivity test of a selection:
-
-```bash
-./selection_test.sh "trk_t0 > 540" t0_540
-```
-
-1. `make_selection_hists.C` writes the histograms to `test_hists/<tag>/`.
-2. `full_loop.sh` builds a histogram-based model (`<tag>_hists`: `CONVANA_HIST_PDFS=1`,
-   `CONVANA_USE_ENV=0`) and an envelope model (`<tag>_env`: `CONVANA_HIST_PDFS=0`,
-   `CONVANA_USE_ENV=1`) from them, in parallel, without the systematic fits (`--no-sys`), since
-   the test histograms only have the nominal set histograms.
-3. Combine generates the Asimov data set of the histogram-based model and fits the envelope model to
-   it (`AsymptoticLimits` on that data set). The limit on it is the sensitivity estimate, and does
-   not depend on which envelope function is the default. The histogram model's own Asimov limit is
-   computed as a reference.
-
-The limits are written to `test_hists/<tag>/summary.txt`, with the logs in `logs/` and the Combine
-outputs in `combine/`. Use `-s`/`-c` for other sets and control regions, `--loop-args` and
-`--fit-args` to pass options to `full_loop.sh` and Combine, and `--skip-hists`/`--skip-models` to
-reuse earlier steps.
-
-### Model configuration from the shell
-
-`defaults.C` reads these environment variables, so the model setup can be chosen without editing it:
-
-- `CONVANA_HIST_PATH`: histogram directory, in place of the default one
-- `CONVANA_HIST_PDFS`: `1` for histogram PDFs, `0` for fit functions (`hist_pdfs_`)
-- `CONVANA_USE_ENV`: `1` to model the mumep background with the envelope (`use_env_`)
-- `CONVANA_USE_2BB`: `1` to use the Mu2eEvtAna inputs re-weighted to 2BB (`ConvAna.*.m2.root`, from
-  Mu2eEvtAna `make_histograms.C` mode 2), normalized to the 2BB duty cycle (0.246) and N(POT) per
-  microbunch (3.93e7) (`use_2bb_`; `full_loop.sh --2bb` sets it). EventNtuple inputs only
-
-Unset variables keep the values in `defaults.C`.
-
-## Driver Script Configuration
-
-`perform_fits.sh` and `full_loop.sh` support environment overrides:
-
-- Global:
-  - `FIT_PDF_TYPE`
-  - `FIT_TAIL_MODEL`
-  - `FIT_SHAPE_SETS`
-  - `FIT_CONTROL_SETS`
-- Component-specific:
-  - `FIT_PDF_TYPE_<COMP>`
-  - `FIT_TAIL_MODEL_<COMP>`
-  - `FIT_SHAPE_SETS_<COMP>`
-  - `FIT_CONTROL_SETS_<COMP>`
-- Set-list controls:
-  - any of the shape/control variables above can be comma-separated integer lists
-
-Supported `<COMP>` values:
-`SIGNAL DIO COSMIC RPC_EXT RPC_INT PBAR RMC_EXT RMC_INT`
-
-For `mumep` the RMC components are split by neutron knockout, so the RMC overrides use
-`RMC_EXT_0N RMC_EXT_1N RMC_INT_0N RMC_INT_1N` instead of `RMC_EXT`/`RMC_INT`.
-
-Example:
-
-```bash
-export FIT_PDF_TYPE=default
-export FIT_PDF_TYPE_SIGNAL=cb
-export FIT_TAIL_MODEL_DIO=convolution
-export FIT_SHAPE_SETS_DIO=20,30
-export FIT_CONTROL_SETS_COSMIC=1020,1030
-./full_loop.sh --process mumem --selections "20 30" --tag test
-```

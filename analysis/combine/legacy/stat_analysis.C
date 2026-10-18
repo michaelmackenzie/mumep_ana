@@ -1,7 +1,7 @@
 // Perform statistical analysis using a RooFit workspace built by build_model.C
 
-#include "../tools/types.C"
-#include "../physics.C"
+#include "../../tools/types.C"
+#include "../../physics.C"
 
 using namespace RooStats;
 

@@ -4,7 +4,7 @@
 
 #include <memory>
 
-#include "../tools/utilities.C"
+#include "../../tools/utilities.C"
 #include "regions.C"
 
 int enforce_uniform_if_sparse(TH1* h,

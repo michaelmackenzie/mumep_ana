@@ -2,10 +2,12 @@
 
 For each scale factor, a background-only Asimov data set is generated from a generation card
 (default: the fit card) with yieldScale set to the scale factor, and the limit is evaluated on it
-with the fit card. The generation card can be a different model of the same observable, e.g. the
-histogram-based model generating the template that a discretely profiled envelope fits:
-  python3 sensitivity_vs_livetime.py datacards/combine_total_mumep_40_evt_r0105_env.txt \\
-      --gen-card datacards/combine_total_mumep_40_evt_r0105_hists.txt
+with the fit card. The generation card can be a different model of the same channels, e.g. the
+histogram-template model generating the background that a discretely profiled envelope fits:
+  python3 sensitivity_vs_livetime.py models/mumep_40_env/combined.txt \\
+      --gen-card models/mumep_40_hists/combined.txt
+build_model.py writes every model as workspaces on the channel observables (obs_<set>), so any of
+its models can generate the data another one fits.
 """
 import argparse
 import glob
@@ -31,6 +33,8 @@ def parse_observed(text, unit = 1.e-15):
 
 def card_name(card):
     base = os.path.splitext(os.path.basename(card))[0]
+    if base == 'combined':  # models/<name>/combined.txt, as written by build_model.py
+        return os.path.basename(os.path.dirname(os.path.abspath(card)))
     for prefix in ['combine_total_', 'combine_']:
         if base.startswith(prefix):
             return base[len(prefix):]

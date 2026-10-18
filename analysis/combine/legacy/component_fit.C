@@ -1,9 +1,9 @@
 #ifndef __CONVANA_ANALYSIS_COMPONENT_FIT__
 #define __CONVANA_ANALYSIS_COMPONENT_FIT__
 
-#include "../tools/utilities.C"
-#include "../defaults.C"
-#include "../physics.C"
+#include "../../tools/utilities.C"
+#include "../../defaults.C"
+#include "../../physics.C"
 #include "background_model.C"
 #include "signal_model.C"
 #include "fit_workspace_utils.C"

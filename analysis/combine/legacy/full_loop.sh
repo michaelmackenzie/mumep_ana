@@ -231,5 +231,5 @@ if [[ "${TESTCOMBINE}" != "" ]]; then
     COMMAND="combine -d ${MERGECARD} -M FitDiagnostics --rMin -50. --rMax 50. --saveShapes --saveWithUncertainties  --cminDefaultMinimizerStrategy=0 --cminApproxPreFitTolerance 0.1 --cminPreScan --cminPreFit 1 ${ADDON}"
     echo ${COMMAND}
     ${COMMAND}
-    root.exe -q -b '../tools/plot_combine_fit.C("'${FITFILE}'", "figures/'${PROCESS}${TAG2}'", true)'
+    root.exe -q -b '../../tools/plot_combine_fit.C("'${FITFILE}'", "figures/'${PROCESS}${TAG2}'", true)'
 fi
