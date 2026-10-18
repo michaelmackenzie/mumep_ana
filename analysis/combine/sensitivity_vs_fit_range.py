@@ -1,18 +1,24 @@
 #! /usr/bin/env python3
 """Expected sensitivity vs. the momentum fit range.
 
-Each range gets its own model from build_model.py --range: the signal-region channels are restricted to the range
-with the full-range shapes of the MC processes (bin by bin, so only the range changes between points), and an envelope
-is refit to the data in the range. Each range then gets an Asimov expected limit. Options not listed below are passed to
-build_model.py (process, sets, control regions, --envelope, --2bb, ...).
+The full-range model is built once (or taken from --full-model) and narrowed to each range with
+mu2ecombine.narrow_model, without refitting: the MC templates keep their full-range shapes bin by bin, fitted PDFs and
+the envelope (all of its functions, with their full-range fits as starting points) are renormalized over the range,
+and the yields are scaled to the fraction inside it. Only the range changes between points, so a range cannot look
+better because its envelope was refit with fewer functions. Each range then gets an Asimov expected limit.
+--refit instead rebuilds each range with build_model.py --range, refitting an envelope to the data in the range.
+
+Options not listed below are passed to build_model.py (process, sets, control regions, --envelope, --2bb, ...).
 
 Example:
+  ./sensitivity_vs_fit_range.py --full-model models/mumep_40_r0106_env --low-edges "87 88 89" --high-edges "96 97"
   ./sensitivity_vs_fit_range.py -p mumem -s 75 --low-edges "100 101 102 103" --high-edges "105 110" --jobs 4
   # remake the figures from the results table of an earlier scan
   ./sensitivity_vs_fit_range.py -p mumem -s 75 --plot-only
 """
 import argparse
 import csv
+import json
 import os
 import re
 import shlex
@@ -218,6 +224,10 @@ def reference_br(card):
 
 
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+parser.add_argument('--full-model', default=None,
+                    help='Existing full-range model directory to narrow (default: build one from the build_model.py options)')
+parser.add_argument('--refit', action='store_true',
+                    help='Rebuild each range with build_model.py --range instead of narrowing the full-range model')
 parser.add_argument('--low-edges', default=None,
                     help='Lower range edges to scan, quoted (default: the full range minimum to its midpoint, in --step steps)')
 parser.add_argument('--high-edges', default=None,
@@ -225,7 +235,7 @@ parser.add_argument('--high-edges', default=None,
 parser.add_argument('--step', type=float, default=0.5, help='Default lower-edge step in MeV/c (default: %(default)s)')
 parser.add_argument('--out-dir', default=None, help='Output directory (default: range_scans/<model name>)')
 parser.add_argument('--jobs', type=int, default=1, help='Ranges to evaluate in parallel, one core each (default: %(default)s)')
-parser.add_argument('--no-combine', action='store_true', help='Only build the models and print the Combine commands')
+parser.add_argument('--no-combine', action='store_true', help='Only make the models and print the Combine commands')
 parser.add_argument('--fit-args', default='', help='Additional Combine arguments for every fit, quoted')
 parser.add_argument('--plot-only', action='store_true',
                     help=f'Only remake the figures from the {TABLE_NAME} of an earlier scan in the output directory')
@@ -234,14 +244,20 @@ if args.jobs < 1 or args.jobs > 20:
     parser.error('--jobs must be between 1 and 20')
 if args.plot_only and args.no_combine:
     parser.error('--plot-only and --no-combine are exclusive')
+if args.full_model and (args.refit or model_argv):
+    parser.error('--full-model narrows an existing model: no --refit or build_model.py options')
 if any(a in ('-o', '--output', '--range') or a.startswith(('--output=', '--range=')) for a in model_argv):
-    parser.error('the scan sets the build_model.py --output and --range of each point')
+    parser.error('the scan sets the build_model.py --output and --range')
 
 sys.path.insert(0, HERE)
 import build_model  # noqa: E402  (loads ROOT and mu2ecombine)
 
-model_args = build_model.parse_args(model_argv)
-model_name = model_args.name
+if args.full_model:
+    full_dir = os.path.abspath(args.full_model)
+    model_name = os.path.basename(full_dir.rstrip('/'))
+else:
+    model_args = build_model.parse_args(model_argv)
+    model_name = model_args.name
 out_dir = os.path.abspath(args.out_dir or os.path.join('range_scans', model_name))
 table = os.path.join(out_dir, TABLE_NAME)
 
@@ -254,21 +270,44 @@ if args.plot_only:
     raise SystemExit(0)
 
 os.makedirs(out_dir, exist_ok=True)
-region = build_model.Region(model_args.process, model_args.selection_list[0])
-full_min, full_max, bin_width = region.xmin, region.xmax, build_model.BIN_WIDTH
+os.environ.update(OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', MKL_NUM_THREADS='1')
+build_command = f'{shlex.quote(sys.executable)} {shlex.quote(os.path.join(HERE, "build_model.py"))} ' + \
+    ' '.join(shlex.quote(a) for a in model_argv) + ' --no-cc'
+if not args.full_model and not args.refit:
+    full_dir = os.path.join(out_dir, 'full')
+    print(f'Building the full-range model in {full_dir}')
+    status, _ = run(f'{build_command} -o {shlex.quote(full_dir)}', HERE, os.path.join(out_dir, 'full_model.log'))
+    if status != 0:
+        raise SystemExit(f'the full-range model failed, see {os.path.join(out_dir, "full_model.log")}')
+
+# the signal-region channels (set_<S>) are narrowed; control regions keep their range
+if args.refit:
+    regions = [build_model.Region(model_args.process, s) for s in model_args.selection_list]
+    edges = build_model.channel_edges(regions[0])
+    narrowed = [build_model.channel_name(r) for r in regions]
+else:
+    with open(os.path.join(full_dir, 'model.json')) as f:
+        channels = json.load(f)['channels']
+    narrowed = [ch for ch in channels if ch.startswith('set_')]
+    if not narrowed:
+        raise SystemExit(f'{full_dir} has no signal-region (set_<S>) channel')
+    edges = np.array(channels[narrowed[0]]['observable']['edges'])
+full_min, full_max = float(edges[0]), float(edges[-1])
+bin_width = float(np.min(np.diff(edges)))
 lows = parse_edges(args.low_edges) if args.low_edges else \
     list(np.round(np.arange(full_min, 0.5*(full_min + full_max) + 1.e-6, args.step), 6))
 highs = parse_edges(args.high_edges) if args.high_edges else [full_max]
-# the edges move to the nearest bin edges, as in build_model.py --range
-snap = lambda x: round(full_min + round((x - full_min) / bin_width) * bin_width, 6)
+# the edges move to the nearest bin edges, as in the narrowing
+snap = lambda x: round(float(edges[np.argmin(np.abs(edges - x))]), 6)
 lows, highs = sorted({snap(x) for x in lows}), sorted({snap(x) for x in highs})
 ranges = [(lo, hi) for hi in highs for lo in lows if hi - lo >= bin_width - 1.e-6]
 if not ranges:
     parser.error('no range with a lower edge below its upper edge')
 print(f'Model {model_name}: p in [{full_min:g}, {full_max:g}] MeV/c, {bin_width:.3g} MeV/c bins, '
-      f'{len(ranges)} ranges, output in {out_dir}')
+      f'{len(ranges)} ranges ({"refit" if args.refit else "narrowed"}), channels {", ".join(narrowed)}, '
+      f'output in {out_dir}')
 
-r_max = 100. if model_args.process == 'mumem' else 500.
+r_max = 100. if 'mumem' in model_name else 500.
 # Minimizer strategy 1: with strategy 0, the profiled fits of the Asimov limit search can get stuck
 # in a worse local minimum of the background (envelope) shape parameters after the large-r points,
 # so q_mu never returns to 0 at small r and the Asimov limit collapses towards 0.
@@ -282,19 +321,35 @@ combine_options = (f'--rMin 0. --rMax {r_max} -t -1 --cl 0.9 --cminDefaultMinimi
                    ' --cminRunAllDiscreteCombinations --X-rtd REMOVE_CONSTANT_ZERO_POINT=1 --X-rtd MINIMIZER_freezeDisassociatedParams'
                    ' --X-rtd MINIMIZER_multiMin_hideConstants --noFitAsimov'
                    + (f' {args.fit_args}' if args.fit_args else ''))
-build_command = f'{shlex.quote(sys.executable)} {shlex.quote(os.path.join(HERE, "build_model.py"))} ' + \
-    ' '.join(shlex.quote(a) for a in model_argv) + ' --no-cc'
-os.environ.update(OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', MKL_NUM_THREADS='1')
+
+# the models: narrowed serially here (ROOT), or rebuilt in parallel (--refit)
+model_status = {}
+if args.refit:
+    def build(lo_hi):
+        lo, hi = lo_hi
+        name = range_name(lo, hi)
+        status, _ = run(f'{build_command} --range {lo} {hi} -o {shlex.quote(os.path.join(out_dir, name))}', HERE,
+                        os.path.join(out_dir, name + '_model.log'))
+        return status
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        model_status = dict(zip(ranges, pool.map(build, ranges)))
+else:
+    for lo, hi in ranges:
+        try:
+            build_model.mc.narrow_model(full_dir, os.path.join(out_dir, range_name(lo, hi)),
+                                        {ch: (lo, hi) for ch in narrowed})
+            model_status[(lo, hi)] = 0
+        except Exception as err:  # noqa: BLE001  (record the failure and continue the scan)
+            print(f'[{lo:g}, {hi:g}] MeV/c: narrowing failed: {err}')
+            model_status[(lo, hi)] = 1
 
 
 def evaluate(lo_hi):
     lo, hi = lo_hi
     name = range_name(lo, hi)
     model_dir = os.path.join(out_dir, name)
-    status, _ = run(f'{build_command} --range {lo} {hi} -o {shlex.quote(model_dir)}', HERE,
-                    os.path.join(out_dir, name + '_model.log'))
     card = os.path.join(model_dir, 'combined.txt')
-    if status != 0 or not os.path.exists(card):
+    if model_status[lo_hi] != 0 or not os.path.exists(card):
         return {'low': lo, 'high': hi, 'status': 'model failed'}
     ref_br = reference_br(card)
     command = f'combine -d combined.txt -n .{name} {combine_options}'

@@ -8,6 +8,9 @@ channel, shapes/, model.json, commands.sh, figures/) and the cut-and-count model
 directly, e.g. with the commands in commands.sh. Every channel is written as a RooWorkspace on its observable
 obs_<set>, so any model of the same channels (templates, functions, envelope) can generate the data another fits.
 
+--only PROCESS builds and fits only that process (to develop or debug its shape), draws it to <output>/debug/, and
+exits without writing a model.
+
 --range LO HI restricts the signal-region channels to a momentum range, keeping the full-range shapes of the MC
 processes bin by bin (an envelope is fit to the data in the range); see sensitivity_vs_fit_range.py.
 
@@ -573,6 +576,11 @@ def make_parser():
                                                           "analysis histogram directory)")
     parser.add_argument("--plots", action="store_true", help="expected stacks and fit figures in <output>/figures")
     parser.add_argument("--no-cc", action="store_true", help="skip the cut-and-count model")
+    parser.add_argument("--only", default=None, metavar="PROCESS",
+                        help="develop/debug one process: build and fit only it (e.g. signal, cosmic, rmc_ext_0n, env), "
+                             "print the result, draw it to <output>/debug/, and exit without writing a model")
+    parser.add_argument("--channel", default=None, help="with --only: the channel (default: every channel with the "
+                                                       "process)")
     return parser
 
 
@@ -613,6 +621,15 @@ def run(args):
             regions[channel_name(region)] = region
 
     data = toy_data(args, samples, regions) if args.data.startswith("toy") else data_hists(args, samples, regions)
+    if args.only:
+        model, _ = define_model(args, samples, regions, data)
+        channels = [args.channel] if args.channel else [ch for ch, c in model.channels.items()
+                                                         if args.only in c.processes]
+        if not channels:
+            sys.exit(f"build_model.py: no channel has the process '{args.only}'")
+        for ch in channels:
+            model.fit_process(ch, args.only, figdir=os.path.join(outdir, "debug"))
+        return outdir
     if args.range:
         full, full_inputs = define_model(args, samples, regions, data, envelope=False)
         regions = narrowed_regions(args, regions)

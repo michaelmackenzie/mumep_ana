@@ -14,6 +14,8 @@ does the statistics.
 - `sensitivity_vs_fit_range.py`: expected sensitivity vs. the momentum fit range.
 - `envelope_scans.py`: likelihood scans of r for each envelope function and with the index profiled.
 - `sensitivity_vs_livetime.py`: expected sensitivity vs. a livetime scale factor.
+- `selection_comparisons.py`: Asimov expected limits of several models (shape and cut-and-count, with and without
+  the constrained nuisances, toys); `--single-test` for only the shape limit with all uncertainties.
 
 ## Setup
 
@@ -31,6 +33,14 @@ export PYTHONPATH=/path/to/Mu2eEvtAna/combine:$PYTHONPATH
 ./full_loop.py -p mumep -s "40" -t v1_env --envelope --plots # data-driven envelope background
 ./full_loop.py -p mumem -s "75" -c "1000 2000 4000"           # with control regions
 ./full_loop.py -p mumep -s "40" --2bb --test-combine          # 2BB exposure, then limits and a fit
+```
+
+To develop or debug one component, build and fit only it: `--only <process>` (e.g. `signal`, `cosmic`,
+`rmc_ext_0n`, `env`) prints its fit result, draws it to `<output>/debug/`, and exits without writing a model.
+`--channel` picks one channel; the `FIT_*` overrides apply as usual, e.g.
+
+```bash
+FIT_PDF_TYPE_COSMIC=poly2 ./build_model.py -p mumep -s 40 --only cosmic
 ```
 
 `full_loop.py` takes the `build_model.py` options (`./build_model.py -h`) plus `--test-combine` (text2workspace, the
@@ -148,20 +158,24 @@ options to `build_model.py` and Combine, and `--skip-hists`/`--skip-models` to r
 
 ## Sensitivity vs. fit range
 
-`sensitivity_vs_fit_range.py` scans the Asimov expected 90% CL limit over momentum fit ranges. It takes the
-`build_model.py` options of the model (process, sets, `--envelope`, ...):
+`sensitivity_vs_fit_range.py` scans the Asimov expected 90% CL limit over momentum fit ranges:
 
 ```bash
+./sensitivity_vs_fit_range.py --full-model models/mumep_40_r0106_env --low-edges "87 88 89" --high-edges "96 97"
 ./sensitivity_vs_fit_range.py -p mumem -s 75 --low-edges "100 101 102 103" --high-edges "105 110" --jobs 4
 ```
 
-- Each range gets a model from `build_model.py --range LO HI`: the signal-region channels are restricted to the range,
-  and each MC process is the full-range model's expectation in the bins inside it (the full-range shapes, with the
-  per-bin MC uncertainties of the inputs), so only the range changes between points. Control-region channels keep
-  their range.
-- An envelope (`--envelope`) is refit to the data inside each range, so its functions and their selection follow the
-  range; this takes a few minutes per range.
-- Range edges are moved to the nearest bin edges. The rate uncertainties stay as they are.
+- The full-range model is built once from the `build_model.py` options (in `<out dir>/full/`), or taken from
+  `--full-model`, and narrowed to each range with mu2ecombine's `narrow_model`, without refitting: the MC templates
+  keep their full-range shapes bin by bin, fitted PDFs and the envelope are renormalized over the range, and the yields
+  are scaled to the fraction inside it. Only the range changes between points.
+- The envelope keeps all of its full-range functions in every range (their parameters still float in Combine), so a
+  range cannot look better because it was refit with fewer functions. Its starting yield is the fraction of its
+  default function inside the range, and it still floats freely.
+- Only the signal-region channels (`set_<S>`) are narrowed; control regions keep their range. Range edges are moved
+  to the nearest bin edges. Rate and MC statistical uncertainties stay as evaluated over the full range.
+- `--refit` instead rebuilds each range with `build_model.py --range`: the MC processes keep their full-range shapes,
+  but an envelope is refit to the data in each range (a few minutes per range).
 - Defaults: lower edges from the range minimum to its midpoint in `--step` (0.5 MeV/c) steps, the upper edge at the
   range maximum. Outputs go to `range_scans/<model name>/`: a model directory per range, logs,
   `sensitivity_vs_fit_range.csv`, and the figures:
@@ -172,9 +186,10 @@ options to `build_model.py` and Combine, and `--skip-hists`/`--skip-models` to r
 - The median expected limit is the observed limit on the Asimov data set (`-t -1`); the +-1/2 sigma bands are the
   expected quantiles. A range whose Asimov limit differs from the expected median by more than 5% is flagged
   (`asimov mismatch`) and left out of the figures: a profiled fit missed the global minimum.
-- The fits use minimizer strategy 1 and `--noFitAsimov` (see the comments in the script). `--fit-args` adds Combine
-  arguments, `--jobs` runs ranges in parallel (one core each, at most 20), `--no-combine` builds the models and prints
-  the Combine commands, and `--plot-only` remakes the figures from the table of an earlier scan.
+- The fits use minimizer strategy 1, `--noFitAsimov`, and 1% limit accuracy (see the comments in the script).
+  `--fit-args` adds Combine arguments, `--jobs` runs the limits in parallel (one core each, at most 20),
+  `--no-combine` makes the models and prints the Combine commands, and `--plot-only` remakes the figures from the
+  table of an earlier scan.
 
 ## Envelope likelihood scans
 
