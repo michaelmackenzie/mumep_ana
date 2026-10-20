@@ -6,26 +6,30 @@ momentum region and the shape of its photon spectrum.
 
 The model (build_model.py with the control region) measures both from the control region data:
   rmcNorm   the RMC rate: a free scale of every RMC process in every channel (no rmcN or lumi on the RMC)
-  RMCPower  the photon spectrum power, shape only (Mu2eEvtAna variations of x(1-x)^n, n = 2 +- 0.5, on the 0n samples,
-            normalized to the nominal yield of each process in each channel): theta = +-1 is the example shift
-  intN      the internal conversion fraction keeps its 4.5% prior (the internal/external ratio)
+  RMCPower     the photon spectrum power, shape only (Mu2eEvtAna variations of x(1-x)^n, n = 2 +- 0.5, on the 0n
+               samples, normalized to the nominal yield of each process in each channel): theta = +-1 is the example shift
+  RMCEndpoint  the photon spectrum endpoint, shape only: theta = -1 lowers kmax = 101.866 MeV by 0.5 MeV; the endpoint
+               cannot move higher, so theta is limited to [-5, 0] and the data give a one-sided limit
+  intN         the internal conversion fraction keeps its 4.5% prior (the internal/external ratio)
 
 Models (in <out dir>/<model>/), with the signal region (set S, 100-110 MeV/c) and the e+ control region (set S + 4000,
 --cr-range), and channel masks to fit either one alone:
-  free      RMCPower with a flat prior (the build_model.py default with the control region)
-  prior     RMCPower with a unit-Gaussian prior (the example shift taken as 1 sigma)
+  free      RMCPower and RMCEndpoint with flat priors
+  prior     RMCPower and RMCEndpoint with unit-Gaussian priors (the example shifts taken as 1 sigma)
 
 Combine on the background-only Asimov data set (r = 0), for the signal region alone (sr), the control region alone
 (cr, r frozen), and both (sr_cr):
   - MultiDimFit --algo singles: the profile-likelihood interval of RMCPower, and the fit covariance (rmcNorm, intN)
-  - likelihood scans of RMCPower (sr, cr, sr_cr), and in the control region of RMCPower with the rate fixed, of
-    rmcNorm with the power free or fixed, and of both (2D)
-  - AsymptoticLimits (90% CL): sr and sr_cr with RMCPower free, with the unit prior, and frozen
+  - likelihood scans of RMCPower and RMCEndpoint (sr, cr, sr_cr), and in the control region of RMCPower with the rate
+    fixed, of RMCEndpoint with the power fixed, of rmcNorm with the power free or fixed, of rmcNorm vs RMCPower and of
+    RMCEndpoint vs RMCPower (2D)
+  - AsymptoticLimits (90% CL): sr and sr_cr with the spectrum free, with the unit priors, and frozen
 Outputs: summary.txt and summary.json; rmc_power_scan.png (RMCPower scans, n on the top axis); rmc_cr_fit.png (the
 control region alone: RMCPower and rmcNorm likelihood curves, their 2D contours, and the RMC shape for n = 1.5, 2,
 2.5); rmc_cr_data_model.png (the control region data with the fitted model and its 68% band, from sampling the fit
 covariance); rmc_cr_rmc_model.png (the fitted RMC model alone with its band); rmc_power_templates.png (the nominal and
-+-1 templates in each channel).
++-1 templates in each channel); rmc_cr_endpoint.png (the RMCEndpoint likelihood curves, its 2D contours with the
+power, and the RMC shape with the lowered endpoint); rmc_endpoint_templates.png.
 """
 
 import argparse
@@ -40,8 +44,9 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-POWER_SHIFT = 0.5   # the RMCPower variation: n = 2 +- 0.5 at theta = +-1
-NUISANCES = ["RMCPower", "rmcNorm", "intN"]
+POWER_SHIFT = 0.5      # the RMCPower variation: n = 2 +- 0.5 at theta = +-1
+ENDPOINT_SHIFT = 0.5   # the RMCEndpoint variation: kmax lowered by 0.5 MeV at theta = -1
+NUISANCES = ["RMCPower", "RMCEndpoint", "rmcNorm", "intN"]
 
 
 def run(command, cwd, log, dry_run=False):
@@ -121,7 +126,7 @@ def interval(scan, level=1.):
     return x[i0], lo, hi
 
 
-def rmc_variation_decomposition(model_dir, channel):
+def rmc_variation_decomposition(model_dir, channel, variation="RMCPower"):
     """Per RMC process with RMCPower in a channel, and for their sum: nominal/up/down per bin, the edges, the yield
     ratios, and the shape ratios (each normalized to its own yield) to the nominal."""
     import ROOT
@@ -131,10 +136,10 @@ def rmc_variation_decomposition(model_dir, channel):
     w = f.Get("w")
     out = {}
     for p, v in info["processes"].items():
-        if "RMCPower" not in v["nuisances"]:
+        if variation not in v["nuisances"]:
             continue
         curves = {}
-        for key, suffix in (("nominal", ""), ("up", "_RMCPowerUp"), ("down", "_RMCPowerDown")):
+        for key, suffix in (("nominal", ""), ("up", f"_{variation}Up"), ("down", f"_{variation}Down")):
             dh = w.data(f"{channel}_{p}{suffix}")
             curves[key] = np.array([(dh.get(i), dh.weight())[1] for i in range(dh.numEntries())])
         out[p] = curves
@@ -204,6 +209,58 @@ def plot_cr_floating(power, norm, scan2d, edges, curves, path, cr_label):
     ax.grid(True, alpha=0.3)
     ax.legend(frameon=False, fontsize=9)
     fig.suptitle(f"{cr_label}: RMC rate and spectrum power", fontsize=13)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
+def plot_cr_endpoint(endpoint, scan2d, edges, curves, path, cr_label, labels):
+    """The RMCEndpoint likelihood curves (one-sided: theta <= 0), its 2D contours with the power in the control region,
+    and the RMC shape with the endpoint lowered by 0.5 MeV relative to the nominal."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, axes = plt.subplots(1, 3, figsize=(17, 5.2))
+    ax = axes[0]
+    styles = {"sr": ("#eb6834", "-"), "cr": ("#2a78d6", "-"), "sr_cr": ("#1F1F1F", "-"), "cr_power_fixed": ("#2a78d6", "--")}
+    names = dict(labels, cr_power_fixed=labels["cr"] + ", power fixed")
+    for key, sc in endpoint.items():
+        if sc is not None:
+            ax.plot(*sc, color=styles[key][0], linestyle=styles[key][1], linewidth=2, label=names[key])
+    for level, text in ((1., "68% CL"), (2.71, "95% CL one-sided")):
+        ax.axhline(level, color="#5C5C5C", linestyle=":", linewidth=1)
+        ax.text(-4.9, level, f" {text}", va="bottom", fontsize=9, color="#5C5C5C")
+    ax.set_xlabel("RMCEndpoint $\\theta$ (unconstrained, $\\theta \\leq 0$)", fontsize=12)
+    ax.set_ylabel(r"$-2\Delta\ln L$", fontsize=12)
+    ax.set_ylim(0., 10.)
+    ax.set_xlim(-5., 0.)
+    top = ax.secondary_xaxis("top", functions=(lambda t: ENDPOINT_SHIFT * t, lambda d: d / ENDPOINT_SHIFT))
+    top.set_xlabel("Endpoint shift [MeV] (linear in $\\theta$)", fontsize=11)
+    ax.grid(True, alpha=0.3)
+    ax.legend(frameon=False, fontsize=8, loc="upper center")
+    ax = axes[1]
+    if scan2d is not None and len(scan2d) > 10:
+        ax.tricontour(scan2d[:, 0], scan2d[:, 1], scan2d[:, 2], levels=[2.30, 5.99], colors=["#1F1F1F", "#2a78d6"],
+                      linestyles=["-", "--"])
+        ax.plot([0.], [0.], marker="+", color="#eb6834", markersize=12)
+        ax.plot([], [], color="#1F1F1F", label="68% CL")
+        ax.plot([], [], color="#2a78d6", linestyle="--", label="95% CL")
+        ax.legend(frameon=False, fontsize=9)
+    ax.set_xlabel("RMCPower $\\theta$", fontsize=12)
+    ax.set_ylabel("RMCEndpoint $\\theta$", fontsize=12)
+    ax.set_title("control region, rate floating", fontsize=10)
+    ax.grid(True, alpha=0.3)
+    ax = axes[2]
+    n = curves["nominal"]
+    for key, color, label in (("nominal", "#1F1F1F", "kmax = 101.87 MeV"), ("down", "#eb6834", "kmax - 0.5 MeV")):
+        c = curves[key]
+        ax.stairs((c / c.sum()) / (n / n.sum()), edges, color=color, linewidth=2, label=label)
+    ax.set_xlabel("p [MeV/c]", fontsize=12)
+    ax.set_ylabel("RMC shape / nominal (each normalized)", fontsize=12)
+    ax.set_xlim(edges[0], edges[0] + 0.75 * (edges[-1] - edges[0]))
+    ax.grid(True, alpha=0.3)
+    ax.legend(frameon=False, fontsize=9)
+    fig.suptitle(f"{cr_label}: RMC spectrum endpoint", fontsize=13)
     fig.tight_layout()
     fig.savefig(path)
     plt.close(fig)
@@ -397,8 +454,9 @@ def plot_scans(scans, path, labels):
     plt.close(fig)
 
 
-def plot_templates(model_dir, path):
-    """Nominal and RMCPower up/down templates of the 0n RMC processes in each channel of a model."""
+def plot_templates(model_dir, path, variation="RMCPower", labels=("n = 2", f"n = {2 + POWER_SHIFT:g}",
+                                                                   f"n = {2 - POWER_SHIFT:g}")):
+    """Nominal and up/down templates of a variation of the 0n RMC processes in each channel of a model."""
     import ROOT
     import matplotlib
     matplotlib.use("Agg")
@@ -410,18 +468,20 @@ def plot_templates(model_dir, path):
         w = f.Get("w")
         edges = np.array(c["observable"]["edges"])
         for p in c["processes"]:
-            if not w.data(f"{ch}_{p}_RMCPowerUp"):
+            if not w.data(f"{ch}_{p}_{variation}Up"):
                 continue
             curves = {}
-            for key, suffix in (("nominal", ""), ("up", "_RMCPowerUp"), ("down", "_RMCPowerDown")):
+            for key, suffix in (("nominal", ""), ("up", f"_{variation}Up"), ("down", f"_{variation}Down")):
                 dh = w.data(f"{ch}_{p}{suffix}")
                 curves[key] = np.array([(dh.get(i), dh.weight())[1] for i in range(dh.numEntries())])
             panels.append((ch, p, edges, curves))
         f.Close()
     fig, axes = plt.subplots(1, len(panels), figsize=(5 * len(panels), 4.5), squeeze=False)
     for ax, (ch, p, edges, curves) in zip(axes[0], panels):
-        for key, color, label in (("nominal", "#1F1F1F", "n = 2"), ("up", "#2a78d6", f"n = {2 + POWER_SHIFT:g}"),
-                                  ("down", "#eb6834", f"n = {2 - POWER_SHIFT:g}")):
+        for key, color, label in (("nominal", "#1F1F1F", labels[0]), ("up", "#2a78d6", labels[1]),
+                                  ("down", "#eb6834", labels[2])):
+            if key == "up" and np.allclose(curves["up"], curves["nominal"]):
+                continue
             ax.stairs(curves[key], edges, color=color, linewidth=2,
                       label=f"{label} ({curves[key].sum():.3g})")
         ax.set_title(f"{ch}: {p}", fontsize=11)
@@ -457,7 +517,7 @@ def main():
     sr_ch, cr_ch = f"set_{sr}", f"cr4000_{sr}"
     build = (f"{shlex.quote(sys.executable)} {shlex.quote(os.path.join(HERE, 'build_model.py'))} -p mumem --no-cc --plots"
              f" -s {sr} -c 4000 --charge-inverted-range {args.cr_range[0]:g} {args.cr_range[1]:g}")
-    models = {"free": "", "prior": "--rmc-power constrained"}
+    models = {"free": "--rmc-endpoint free", "prior": "--rmc-power constrained --rmc-endpoint constrained"}
     configs = {"sr": f"mask_{cr_ch}=1", "cr": f"mask_{sr_ch}=1", "sr_cr": ""}
     labels = {"sr": f"signal region (set {sr}, 100-110 MeV/c) only",
               "cr": f"e+ control region (set {cr}, {args.cr_range[0]:g}-{args.cr_range[1]:g} MeV/c) only",
@@ -476,7 +536,7 @@ def main():
                 sys.exit(f"rmc_constraint_study.py: text2workspace of {m} failed, see {logs}/t2w_{m}.log")
 
     extra = f" {args.fit_args}" if args.fit_args else ""
-    ranges = "RMCPower=-5,5:rmcNorm=0.2,5:r=-20,20"
+    ranges = "RMCPower=-5,5:RMCEndpoint=-5,0:rmcNorm=0.2,5:r=-20,20"
 
     def fit(config, freeze=(), ranges=ranges):
         """Asimov (r = 0) options of a configuration: its channel mask, r frozen without the signal region."""
@@ -490,13 +550,23 @@ def main():
     # stays a nuisance and its post-fit uncertainty comes from the fit covariance.
     jobs = []
     for config in configs:
-        jobs.append(("free", f"{config}_singles", f"{fit(config)} --redefineSignalPOIs RMCPower,rmcNorm --algo singles"
+        jobs.append(("free", f"{config}_singles", f"{fit(config)} --redefineSignalPOIs RMCPower,RMCEndpoint,rmcNorm"
+                                                  " --algo singles"
                                                   f" --saveFitResult{extra} -n .{config}_singles"))
-        jobs.append(("free", f"{config}_scan", f"{fit(config, ranges='RMCPower=-4,4:rmcNorm=0.2,5:r=-20,20')}"
+        jobs.append(("free", f"{config}_scan_endpoint", f"{fit(config)} --redefineSignalPOIs RMCEndpoint"
+                                                        " -P RMCEndpoint --floatOtherPOIs 1 --algo grid --points 51"
+                                                        f"{extra} -n .{config}_scan_endpoint"))
+        jobs.append(("free", f"{config}_scan", f"{fit(config, ranges='RMCPower=-4,4:RMCEndpoint=-5,0:rmcNorm=0.2,5:r=-20,20')}"
                                                " --redefineSignalPOIs RMCPower -P RMCPower --floatOtherPOIs 1"
                                                f" --algo grid --points 81{extra} -n .{config}_scan"))
-    norm_ranges = "RMCPower=-4,4:rmcNorm=0.5,1.5:r=-20,20"
-    jobs += [("free", "cr_scan_power_rate_fixed", f"{fit('cr', ['rmcNorm'], 'RMCPower=-4,4:r=-20,20')}"
+    norm_ranges = "RMCPower=-4,4:RMCEndpoint=-5,0:rmcNorm=0.5,1.5:r=-20,20"
+    jobs += [("free", "cr_scan_endpoint_power_fixed", f"{fit('cr', ['RMCPower'])} --redefineSignalPOIs RMCEndpoint"
+                                                      " -P RMCEndpoint --floatOtherPOIs 1 --algo grid --points 51"
+                                                      f"{extra} -n .cr_scan_endpoint_power_fixed"),
+             ("free", "cr_scan_2d_spectrum", f"{fit('cr', ranges='RMCPower=-2.5,2.5:RMCEndpoint=-5,0:rmcNorm=0.2,5:r=-20,20')}"
+                                             " --redefineSignalPOIs RMCPower,RMCEndpoint -P RMCPower -P RMCEndpoint"
+                                             f" --floatOtherPOIs 1 --algo grid --points 1600{extra} -n .cr_scan_2d_spectrum"),
+             ("free", "cr_scan_power_rate_fixed", f"{fit('cr', ['rmcNorm'], 'RMCPower=-4,4:RMCEndpoint=-5,0:r=-20,20')}"
                                                   " --redefineSignalPOIs RMCPower -P RMCPower --floatOtherPOIs 1"
                                                   f" --algo grid --points 81{extra} -n .cr_scan_power_rate_fixed"),
              ("free", "cr_scan_norm", f"{fit('cr', ranges=norm_ranges)} --redefineSignalPOIs rmcNorm -P rmcNorm"
@@ -504,7 +574,7 @@ def main():
              ("free", "cr_scan_norm_power_fixed", f"{fit('cr', ['RMCPower'], norm_ranges)} --redefineSignalPOIs rmcNorm"
                                                   " -P rmcNorm --floatOtherPOIs 1 --algo grid --points 81"
                                                   f"{extra} -n .cr_scan_norm_power_fixed"),
-             ("free", "cr_scan_2d", f"{fit('cr', ranges='RMCPower=-2.5,2.5:rmcNorm=0.7,1.3:r=-20,20')}"
+             ("free", "cr_scan_2d", f"{fit('cr', ranges='RMCPower=-2.5,2.5:RMCEndpoint=-5,0:rmcNorm=0.7,1.3:r=-20,20')}"
                                     " --redefineSignalPOIs RMCPower,rmcNorm -P RMCPower -P rmcNorm --floatOtherPOIs 1"
                                     f" --algo grid --points 1600{extra} -n .cr_scan_2d"),
              ("prior", "sr_cr_singles", f"{fit('sr_cr')} --redefineSignalPOIs rmcNorm --algo singles --saveFitResult"
@@ -517,7 +587,7 @@ def main():
              ("free", "sr_cr_limit", f"{limit} -n .sr_cr_limit"),
              ("prior", "sr_limit", f"{limit}{mask_cr} -n .sr_limit"),
              ("prior", "sr_cr_limit", f"{limit} -n .sr_cr_limit"),
-             ("prior", "sr_cr_limit_frozen", f"{limit} --freezeParameters RMCPower -n .sr_cr_limit_frozen")]
+             ("prior", "sr_cr_limit_frozen", f"{limit} --freezeParameters RMCPower,RMCEndpoint -n .sr_cr_limit_frozen")]
 
     def execute(job):
         m, kind, command = job
@@ -550,6 +620,16 @@ def main():
     edges, curves, decomposition = rmc_variation_decomposition(os.path.join(out, "free"), cr_ch)
     plot_cr_floating(power, norm, scan2d, edges, curves["total"], os.path.join(out, "rmc_cr_fit.png"), labels["cr"])
     results["free"]["cr_decomposition"] = decomposition
+    endpoint = {c: scan(f"{c}_scan_endpoint", "RMCEndpoint") for c in configs}
+    endpoint["cr_power_fixed"] = scan("cr_scan_endpoint_power_fixed", "RMCEndpoint")
+    spectrum2d = read_scan_2d(os.path.join(out, "free", "higgsCombine.cr_scan_2d_spectrum.MultiDimFit.mH120.root"),
+                              "RMCPower", "RMCEndpoint")
+    e_edges, e_curves, e_decomposition = rmc_variation_decomposition(os.path.join(out, "free"), cr_ch, "RMCEndpoint")
+    plot_cr_endpoint(endpoint, spectrum2d, e_edges, e_curves["total"], os.path.join(out, "rmc_cr_endpoint.png"),
+                     labels["cr"], labels)
+    plot_templates(os.path.join(out, "free"), os.path.join(out, "rmc_endpoint_templates.png"), "RMCEndpoint",
+                   ("kmax = 101.87 MeV", "kmax (up = nominal)", "kmax - 0.5 MeV"))
+    results["free"]["cr_endpoint_decomposition"] = e_decomposition
     bands = plot_cr_postfit(os.path.join(out, "free"), os.path.join(out, "free", "multidimfit.cr_singles.root"), cr_ch,
                             labels["cr"], out)
     results["free"]["cr_postfit_bands"] = bands
@@ -558,7 +638,8 @@ def main():
     lines = [f"RMC constraint study: mu- --> e- set {sr}, e+ control region set {cr} at "
              f"{args.cr_range[0]:g}-{args.cr_range[1]:g} MeV/c (background-only Asimov)",
              f"build_model.py options: {args.model_args or '(defaults)'}",
-             "RMC rate: rmcNorm (flat); spectrum power: RMCPower (shape only; theta = +-1 is n = 2 +- 0.5)", "",
+             "RMC rate: rmcNorm (flat); spectrum power: RMCPower (shape only; theta = +-1 is n = 2 +- 0.5); spectrum "
+             "endpoint: RMCEndpoint (shape only; theta = -1 lowers kmax by 0.5 MeV, theta <= 0)", "",
              "Profile-likelihood 68% CL intervals (both parameters free):",
              f"{'fit':8s} {'RMCPower':>9s} {'-68%':>8s} {'+68%':>8s} {'sigma(n)':>9s}   "
              f"{'rmcNorm':>8s} {'-68%':>8s} {'+68%':>8s}"]
@@ -570,12 +651,24 @@ def main():
                 else f"{'-':>9s} {'':8s} {'':8s} {'':9s}   ")
         row += f"{nrm[0]:8.3f} {nrm[1]:8.3f} {nrm[2]:8.3f}" if nrm else f"{'-':>8s}"
         lines.append(row)
-    lines += ["", "Fit covariance uncertainties (RMCPower, rmcNorm absolute; intN in units of its prior sigma):",
-              f"{'fit':26s} {'RMCPower':>9s} {'rmcNorm':>8s} {'intN':>8s}"]
+    lines += ["", "RMCEndpoint, one-sided (theta <= 0): lower limits from the likelihood scans (others profiled)",
+              f"{'fit':26s} {'68% CL theta':>13s} {'shift [MeV]':>12s} {'95% CL theta':>13s} {'shift [MeV]':>12s}"]
+    for key, label in (("sr", "sr"), ("cr", "cr"), ("sr_cr", "sr_cr"), ("cr_power_fixed", "cr, power fixed")):
+        sc = endpoint.get(key)
+        lims = [interval(sc, level)[1] if sc is not None else None for level in (1., 2.71)]
+        row = f"{label:26s} "
+        for lim in lims:
+            row += (f"{lim:13.2f} {ENDPOINT_SHIFT * lim:12.2f} " if lim is not None
+                    else f"{'< -5':>13s} {'< -2.5':>12s} ")
+        lines.append(row.rstrip())
+    lines += ["", "Fit covariance uncertainties (RMCPower, RMCEndpoint, rmcNorm absolute; intN in units of its prior "
+                  "sigma; RMCEndpoint sits at its boundary theta = 0, so its Hesse error is approximate):",
+              f"{'fit':26s} {'RMCPower':>9s} {'RMCEndp.':>9s} {'rmcNorm':>8s} {'intN':>8s}"]
     for m, kind, label in [("free", f"{c}_fit", f"{c}") for c in configs] + \
                           [("prior", "sr_cr_fit", "sr_cr (unit prior on power)")]:
         f = results[m].get(kind) or {}
         lines.append(f"{label:26s} {fmt(f.get('RMCPower', (None, None))[1], 9)} "
+                     f"{fmt(f.get('RMCEndpoint', (None, None))[1], 9)} "
                      f"{fmt(f.get('rmcNorm', (None, None))[1])} {fmt(f.get('intN', (None, None))[1])}")
     lines += ["", "Control region alone, likelihood scans (68% CL):", f"{'scan':34s} {'best fit':>9s} {'-68%':>8s} {'+68%':>8s}"]
     for label, sc in (("RMCPower, rate floating", power["floating"]), ("RMCPower, rate fixed (rmcNorm = 1)", power["fixed"]),
@@ -597,12 +690,16 @@ def main():
                   f"{args.cr_range[0]:g}-{args.cr_range[1]:g} MeV/c, from sampling the fit covariance",
               f"  total model: {100 * bands['total'][0]:+.1f}% / {100 * bands['total'][1]:+.1f}%",
               f"  RMC:         {100 * bands['rmc'][0]:+.1f}% / {100 * bands['rmc'][1]:+.1f}%"]
+    lines += ["", "RMCEndpoint -1 (kmax - 0.5 MeV) in the control region: the range of the shape ratio",
+              f"{'process':10s} {'yield':>9s} {'down shape':>15s}"]
+    for p, e in e_decomposition.items():
+        lines.append(f"{p:10s} {e['yield']:9.2f} {e['down_shape_ratio_range'][0]:6.3f}-{e['down_shape_ratio_range'][1]:6.3f}")
     lines += ["", "Expected 90% CL upper limits on r (Asimov median, -1 sigma, +1 sigma):"]
-    for m, kind, label in (("free", "sr_limit", "signal region only, RMCPower free"),
-                           ("prior", "sr_limit", "signal region only, unit prior"),
-                           ("free", "sr_cr_limit", "signal + e+ control region, RMCPower free"),
-                           ("prior", "sr_cr_limit", "signal + e+ control region, unit prior"),
-                           ("prior", "sr_cr_limit_frozen", "signal + e+ control region, RMCPower frozen")):
+    for m, kind, label in (("free", "sr_limit", "signal region only, spectrum free"),
+                           ("prior", "sr_limit", "signal region only, unit priors"),
+                           ("free", "sr_cr_limit", "signal + e+ control region, spectrum free"),
+                           ("prior", "sr_cr_limit", "signal + e+ control region, unit priors"),
+                           ("prior", "sr_cr_limit_frozen", "signal + e+ control region, spectrum frozen")):
         lim = results[m].get(kind, {})
         lines.append(f"  {label:46s} {fmt(lim.get('median'))} {fmt(lim.get('16.0'))} {fmt(lim.get('84.0'))}")
     text = "\n".join(lines)

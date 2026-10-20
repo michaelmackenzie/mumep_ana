@@ -94,9 +94,12 @@ SIGNAL_FIT_MAX = {"mumem": 107., "mumep": 97.}
 DIO_TAIL_START = 102.
 SPARSE_FRACTION = 0.75
 COSMIC_CR_RATIO = {True: 754., False: 471.}  # CRV-tagged / vetoed cosmic yield, e- / e+ tracks
-# RMC samples with the Mu2eEvtAna RMCPower variations (photon spectrum x(1-x)^n, n = 2 +- 0.5): the 0 neutron
-# knockout samples. The power is a shape-only uncertainty: its up/down templates keep each process's nominal yield in
-# every channel, so it is separate from the RMC rate
+# RMC samples with the Mu2eEvtAna photon spectrum variations, the 0 neutron knockout samples:
+#   RMCPower     x(1-x)^n with n = 2 +- 0.5
+#   RMCEndpoint  the endpoint kmax = 101.866 MeV lowered by 0.5 MeV (down); up is the nominal, as the endpoint cannot
+#                move higher, so theta <= 0 is its physical range
+# Both are shape-only uncertainties: their up/down templates keep each process's nominal yield in every channel, so
+# they are separate from the RMC rate
 RMC_POWER_SAMPLES = {"mumem": ("rmc_ext", "rmc_int"), "mumep": ("rmc_ext_0n", "rmc_int_0n")}
 
 
@@ -356,6 +359,19 @@ def new_model(args, name):
     return model
 
 
+def rmc_spectrum_variation(sample, name, selection):
+    """(up, down) histograms of an RMC photon spectrum variation (RMCPower, RMCEndpoint) of a 0n RMC sample. Files made
+    before Mu2eEvtAna fixed the RMCEndpoint type hold a copy of RMCPower in its place: those are refused."""
+    up, down = sample.variation(name, selection)
+    if name == "RMCEndpoint":
+        p_up, p_down = sample.variation("RMCPower", selection)
+        same = lambda a, b: all(a.GetBinContent(i) == b.GetBinContent(i) for i in range(a.GetNbinsX() + 2))
+        if same(up, p_up) and same(down, p_down) and up.Integral() > 0:
+            sys.exit(f"build_model.py: {sample.name}: the RMCEndpoint histograms of set {selection} are copies of "
+                     "RMCPower: the file was made before the Mu2eEvtAna RMCEndpoint fix, remake it")
+    return up, down
+
+
 def common_terms(args, model, channels, processes):
     """Rate uncertainties, the mcstat group, and frozen yield scale factors (set them with --setParameters, e.g.
     yieldScale=2 or scale_dio=0.5)."""
@@ -392,10 +408,15 @@ def define_model(args, samples, regions, data=None, envelope=True):
             if result is None:
                 continue
             shape, inputs[ch][comp] = result
-            if args.rmc_power != "off" and comp in RMC_POWER_SAMPLES[args.process]:
-                up, down = samples[comp].variation("RMCPower", region.selection)
-                shape.variations = mc.shapes.as_variations({"RMCPower": (mc.rebin_to(up, edges),
-                                                                         mc.rebin_to(down, edges), "shape_only")})
+            if comp in RMC_POWER_SAMPLES[args.process]:
+                variations = {}
+                for name, treatment in (("RMCPower", args.rmc_power), ("RMCEndpoint", args.rmc_endpoint)):
+                    if treatment == "off":
+                        continue
+                    up, down = rmc_spectrum_variation(samples[comp], name, region.selection)
+                    variations[name] = (mc.rebin_to(up, edges), mc.rebin_to(down, edges), "shape_only")
+                if variations:
+                    shape.variations = mc.shapes.as_variations(variations)
             channel.add(comp, shape, signal=comp == "signal", title=title(args.process, comp))
             processes.add(comp)
         if use_envelope:
@@ -405,6 +426,8 @@ def define_model(args, samples, regions, data=None, envelope=True):
     common_terms(args, model, regions, processes)
     if args.rmc_power == "free":
         model.unconstrained("RMCPower")
+    if args.rmc_endpoint == "free":
+        model.unconstrained("RMCEndpoint")
     return model, inputs
 
 
@@ -585,6 +608,10 @@ def make_parser():
                              "for an envelope model")
     parser.add_argument("--mc-stat", action="store_true", help="MC statistical uncertainties of the yields")
     parser.add_argument("--poi-range", type=float, nargs=2, default=(-50., 50.), metavar=("LO", "HI"))
+    parser.add_argument("--rmc-endpoint", default="off", choices=("off", "constrained", "free"),
+                        help="the RMC photon spectrum endpoint uncertainty (Mu2eEvtAna RMCEndpoint, kmax lowered by 0.5 "
+                             "MeV at theta = -1, shape only, one-sided: theta <= 0) on the 0n RMC processes: none "
+                             "(default), a unit-Gaussian (constrained) or a flat (free) prior")
     parser.add_argument("--charge-inverted-range", type=float, nargs=2, default=None, metavar=("LO", "HI"),
                         help="momentum range of the charge-inverted control regions (default: 95-105 MeV/c for "
                              "mumem, 87-97 for mumep)")

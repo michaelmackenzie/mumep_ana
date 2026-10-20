@@ -15,6 +15,7 @@ does the statistics.
 - `envelope_scans.py`: likelihood scans of r for each envelope function and with the index profiled.
 - `sensitivity_vs_livetime.py`: expected sensitivity vs. a livetime scale factor.
 - `rmc_constraint_study.py`: the RMC rate and spectrum power measured in the e+ control region.
+- `rmc_sr_prescription.py`: the RMC normalization and shape uncertainties for the e- signal region, from that measurement.
 - `selection_comparisons.py`: Asimov expected limits of several models (shape and cut-and-count, with and without
   the constrained nuisances, toys); `--single-test` for only the shape limit with all uncertainties.
 
@@ -231,6 +232,10 @@ With a charge-inverted control region in the model, `build_model.py` lets the co
   shape only: its up/down templates keep the nominal yield of each process in each channel, so it is separate from
   the rate. It has a flat prior (`shapeU`); `--rmc-power` sets another treatment (off, constrained).
 - `intN` keeps its prior, fixing the internal/external ratio.
+- `--rmc-endpoint` (off by default) adds the photon spectrum endpoint (Mu2eEvtAna `RMCEndpoint`), shape only: theta
+  = -1 lowers kmax = 101.866 MeV by 0.5 MeV, and up is the nominal, since the endpoint cannot move higher (theta <= 0
+  is the physical range). Histogram files made before the Mu2eEvtAna fix of its systematic type hold a copy of
+  `RMCPower` in its place, and `build_model.py` refuses them.
 
 Without a control region, the RMC keeps the `rmcN` prior and no power uncertainty.
 
@@ -241,7 +246,8 @@ Without a control region, the RMC keeps the `rmcN` prior and no power uncertaint
 ```
 
 - One model with the signal region and the e+ control region (and channel masks to fit either alone), with the power
-  free, and one with a unit-Gaussian prior on it.
+  and the endpoint free, and one with unit-Gaussian priors on them. The endpoint is limited to theta in [-5, 0], and
+  its constraints are one-sided lower limits.
 - Profile-likelihood intervals and fit-covariance uncertainties of `RMCPower`, `rmcNorm`, and `intN` for the signal
   region, the control region, and both; likelihood scans of the power and the rate (each with the other free or
   fixed) and their 2D contours in the control region; the expected limits with the power free, with the prior, and
@@ -250,9 +256,74 @@ Without a control region, the RMC keeps the `rmcN` prior and no power uncertaint
   - `rmc_cr_data_model.png`: the control region data with the fitted model, its components, and the 68% band
   - `rmc_cr_rmc_model.png`: the fitted RMC model alone (external, internal, total) with its band
   - `rmc_cr_fit.png`: the power and rate likelihood curves, their 2D contours, and the RMC shape for n = 1.5, 2, 2.5
-  - `rmc_power_scan.png`, `rmc_power_templates.png`
+  - `rmc_cr_endpoint.png`: the endpoint likelihood curves, its 2D contours with the power, and the RMC shape with the
+    lowered endpoint
+  - `rmc_power_scan.png`, `rmc_power_templates.png`, `rmc_endpoint_templates.png`
 - The bands come from sampling the covariance of the control-region fit (all floating parameters with their
   correlations) and re-evaluating the per-bin yields of the Combine workspace.
+
+### RMC prescription for the signal region
+
+`rmc_sr_prescription.py` gives the RMC uncertainties to use in the e- signal region by analyses that do not fit the
+e+ control region simultaneously: a normalization (lnN) and a shape uncertainty, motivated by the control region
+measurement. It reruns everything it needs, so the estimate can be redone whenever the inputs change:
+
+```bash
+./rmc_sr_prescription.py                       # set 75 / 4075, 100-110 and 94-105 MeV/c
+./rmc_sr_prescription.py -s 79 -t v2           # another set; --sr-range, --cr-range, --hist-path, --endpoint-prior
+```
+
+**After a selection change** (e.g. a cut in set 75):
+
+1. Remake the ConvAna histograms with Mu2eEvtAna for all datasets, including the two 0n RMC samples
+   (`rmce0b1s5r0101`, `rmci0b1s5r0101`). ConvAna fills the photon spectrum variations of the RMC samples
+   (`sys_<set>/obs_21-24`: RMCPower and RMCEndpoint) for the signal-region set and its e+ partner (set + 4000), which
+   the estimate needs. Histograms re-filled from the selection trees with `make_selection_hists.C` cannot be used: the
+   trees do not store the RMC photon energy, so they have no variations, and the script stops with a message.
+2. Run `./rmc_sr_prescription.py` (with `--hist-path` if the new histograms are in another directory). It reruns the
+   e+ control region study (`rmc_constraint_study.py`, about a minute) when its outputs are missing or older than any
+   input histogram file (`--run-study` forces it), then derives the prescription (a few minutes).
+3. Read `rmc_studies/mumem_<set>[_<tag>]/sr_prescription/summary.txt`: the recommendation at the top, the inputs
+   behind it, and the checks at the bottom (`<-- CHECK` marks a problem).
+
+**What it does.** The signal-region external RMC predicted from the control region is
+N_SR = N_CR(measured) x f_ext x [SR / CR](spectrum):
+
+- The control region fit (RMC rate floating, RMCPower and RMCEndpoint free, Asimov) gives the rate (`rmcNorm`) and
+  the likelihood of the spectrum, the power n and the endpoint, which it cannot separate: both tilt the e+ spectrum
+  at 94-100 MeV/c the same way.
+- The external fraction of the control region RMC carries the `intN` uncertainty (4.5% on the internal/external
+  ratio).
+- The signal/control region yield ratio depends strongly on the spectrum: e- above 100 MeV/c come from photons within
+  ~2 MeV of the 101.9 MeV endpoint, while the control region sees k ~ 94-98 MeV. Its factors for n = 2 +- 0.5 and an
+  endpoint lowered by 0.5 MeV come from the MC (the Mu2eEvtAna normalization of the variations cancels in the ratio).
+- The spectrum is sampled from the control region likelihood with flat priors (the endpoint lowered by up to
+  `--endpoint-prior` MeV, 0.5 by default, and fixed). The normalization is the envelope of the 16% and 84% quantiles
+  of the yield factor of both cases, around the nominal yield.
+- The shape comes from a generator-level model of the signal-region e- spectrum, since the MC has only ~13 events
+  above 100 MeV/c: the photon spectrum x(1-x)^n, a pair-conversion lepton with a uniform share of the photon energy,
+  and the DIO e- momentum response shifted by an extra momentum loss fit to the MC shape. The sampled shapes are
+  expressed with the RMCPower variation: the prior width on its parameter that reproduces their (event-weighted)
+  spread, taken as the largest over the 68% CL range of the momentum loss, and the fraction of the spread it captures.
+
+**Reading the result** (set 75 with the Run 1A inputs, 2026-10-18):
+
+- Normalization: lnN 0.44/1.61 on the signal-region RMC. The control region measures the rate to 7%; the
+  extrapolation to p > 100 MeV/c dominates.
+- Shape: the Mu2eEvtAna RMCPower variation (n = 2 +- 0.5 at theta = +-1), shape only in the channel, with a unit
+  Gaussian prior (width 1.05, i.e. n = 2 +- 0.52; 0.68 if the endpoint is known). It captures >= 90% of the shape
+  spread, about as much as the leading principal component; the endpoint variation describes the same shape but is
+  one-sided. Smooth the RMCPower templates in the signal region (the MC is sparse), e.g. with a fit as in
+  `build_model.py`.
+- Not included: the MC statistical uncertainty of the signal-region RMC yield (+-28% from the 13 events), which the
+  analysis carries separately.
+- The checks compare the model with the MC variation factors, flag a momentum loss at the edge of its range, a
+  posterior at the edge of the scanned power range, and a signal region with fewer than 5 MC events.
+
+Outputs in `<study-dir>/sr_prescription/`: `summary.txt`, `prescription.json` (the recommendation, all inputs, and the
+input files with their dates), `rmc_sr_shape.root` (the leading shape mode as ratio histograms),
+`rmc_sr_prescription.png` (the yield factor distributions, the model vs MC shape, and the shape spread with the
+RMCPower width).
 
 ## Selection Variations
 
