@@ -22,7 +22,7 @@ DEFAULT_DATA_DIR = "/exp/mu2e/data/users/mmackenz/trkpid/data/"
 DEFAULT_SIGNAL   = "nts.flate.root"
 DEFAULT_BKG      = "nts.flatmu.root"
 DEFAULT_HIST_DIR = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms/"
-WORKING_POINT    = 0.67  # Run 1A selection: PID() > 0.67 (Mu2eEvtAna ConvAna::Run1ATrackID)
+WORKING_POINT    = 0.574 # Default selection (ConvAna set 79): PID() > 0.574; the selection is still being optimized
 
 STUDY_DIR = Path(__file__).resolve().parent
 
@@ -297,8 +297,11 @@ def label_figure(fig):
         if not covered: mu2e_label(ax)
 
 
-def save(fig, figdir, name, formats=("pdf", "png")):
-    label_figure(fig)
+def save(fig, figdir, name, formats=("pdf", "png"), label_axes=None):
+    """Save the figure, adding the Mu2e label to label_axes (default: the top row of axes)."""
+    if label_axes is None: label_figure(fig)
+    else:
+        for ax in label_axes: mu2e_label(ax)
     Path(figdir).mkdir(parents=True, exist_ok=True)
     for ext in formats:
         fig.savefig(Path(figdir) / f"{name}.{ext}", dpi=150)

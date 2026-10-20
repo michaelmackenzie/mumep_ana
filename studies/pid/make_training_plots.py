@@ -12,7 +12,7 @@ A summary of the working-point numbers is written to <out-dir>/pid_summary.json.
 
 Example:
   python make_training_plots.py                 # full selection (~1 min), cached in outputs/
-  python make_training_plots.py --wp 0.67 --figdir figures/training
+  python make_training_plots.py --wp 0.574 --figdir figures/training
 """
 
 import argparse
@@ -48,29 +48,30 @@ def plot_features(plt, df, figdir, formats):
     def draw(ax, var):
         lo, hi = pt.RANGES[var]
         bins = np.linspace(lo, hi, 61)
-        zero_fit = []
         for label, style in ((1, ELE), (0, MU)):
             x = test.loc[test.label == label, var]
             # normalize to all tracks, so the few entries outside the range (or undefined) are not drawn
             w = np.full(len(x), 1. / (len(x) * (bins[1] - bins[0])))
             ax.hist(x, bins=bins, weights=w, histtype="step", lw=1.5, **style)
-            zero_fit.append(f"{style['label']}: {100*np.mean(np.isnan(x)):.1f}%")
-        if var == "logfitcon":
-            ax.text(0.03, 0.97, "Fit consistency = 0:\n" + ", ".join(zero_fit), transform=ax.transAxes,
-                    va="top", ha="left", fontsize=10)
         ax.set_xlabel(pt.LABELS[var])
         ax.set_ylabel("Normalized entries")
         ax.set_xlim(lo, hi)
 
-    # Combined 2x2 figure
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8))
-    for ax, var in zip(axes.flat, names):
-        draw(ax, var)
-        ax.set_yscale("log")
-    axes[0, 0].legend(loc="upper left")
-    fig.tight_layout()
-    pt.save(fig, figdir, "pid_features", formats)
-    plt.close(fig)
+    # Combined 2x2 figure, with fonts scaled up so it reads well at half the page width
+    scale = 1.3
+    rc = {key: scale*plt.rcParams[key] for key in ("font.size", "axes.labelsize", "legend.fontsize",
+                                                   "xtick.major.size", "ytick.major.size",
+                                                   "xtick.minor.size", "ytick.minor.size")}
+    with plt.rc_context(rc):
+        fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+        for ax, var in zip(axes.flat, names):
+            draw(ax, var)
+            ax.set_yscale("log")
+        axes[0, 0].set_ylim(top=axes[0, 0].get_ylim()[1]*30)  # headroom for the legend
+        axes[0, 0].legend(loc="upper left", ncol=2)
+        fig.tight_layout()
+        pt.save(fig, figdir, "pid_features", formats, label_axes=[axes[0, 0]])
+        plt.close(fig)
 
     # Individual figures, linear and log
     for var in names:

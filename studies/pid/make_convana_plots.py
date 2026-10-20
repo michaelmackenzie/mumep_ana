@@ -77,6 +77,11 @@ def eff_vs_cut(counts, edges, total):
     return edges[:-1], above / total
 
 
+def eff_at(cuts, eff, cut):
+    """Efficiency for score > cut, linearly interpolated within the bin when the cut is not a bin edge."""
+    return float(np.interp(cut, cuts, eff))
+
+
 def main():
     args = parse_args()
     plt = pt.setup_style()
@@ -87,6 +92,8 @@ def main():
         fig_pid, ax_pid = plt.subplots()
         fig_eff, ax_eff = plt.subplots()
         print(f">>> {desc} (track set {set_id}): efficiency for PID score > {args.wp:g}")
+        if not np.isclose(args.wp*100., round(args.wp*100.)):
+            print(f"    (the cut is inside a 0.01-wide score bin, so the efficiencies are interpolated within that bin)")
         n_drawn = 0
         for dataset, label, color, ls in samples:
             h = score_hist(dataset, set_id, args)
@@ -94,11 +101,9 @@ def main():
             counts, edges, total = h
             cuts, eff = eff_vs_cut(counts, edges, total)
             curves[(set_id, dataset)] = (cuts, eff)
-            i_wp = np.argmin(np.abs(cuts - args.wp))
-            if abs(cuts[i_wp] - args.wp) > 1e-6:
-                print(f"!!! Working point {args.wp} is not a bin edge, using {cuts[i_wp]:.4f}")
+            eff_wp = eff_at(cuts, eff, args.wp)
             scored = counts[edges[:-1] >= 0.].sum()  # tracks with a valid score in [0, 1]
-            print(f"    {dataset}: {eff[i_wp]:.5f} of all tracks, {counts[i_wp:].sum()/scored if scored > 0 else np.nan:.5f}"
+            print(f"    {dataset}: {eff_wp:.5f} of all tracks, {eff_wp*total/scored if scored > 0 else np.nan:.5f}"
                   f" of tracks with a score (N(tracks) = {total:.0f})")
 
             # draw the [0, 1] score range, normalized to all tracks in the set
@@ -138,8 +143,7 @@ def main():
         cuts, eff_e = curves[(4, dataset)]
         ok = mu[1] > 0
         ax.plot(eff_e[ok], mu[1][ok], color=color, ls=ls, lw=1.5, label=label)
-        i_wp = np.argmin(np.abs(cuts - args.wp))
-        ax.plot([eff_e[i_wp]], [mu[1][i_wp]], "*", color="#d62728", ms=10)
+        ax.plot([eff_at(cuts, eff_e, args.wp)], [eff_at(*mu, args.wp)], "*", color="#d62728", ms=10)
     ax.plot([], [], "*", color="#d62728", ms=10, label=f"Score > {args.wp:g}")
     ax.set_xlabel(r"$e^-$ efficiency")
     ax.set_ylabel(r"Flat $\mu^-$ efficiency (no pileup)")

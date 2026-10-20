@@ -13,7 +13,8 @@ inputs:
 - the slope of straw-hit time vs. track time (`trkdtdt_slope`, added by `make_inputs.py`)
 
 Offline runs it in `ArtAnalysis/TrkDiag` (`TrackPID_module.cc`, `data/TrackPID_v1.dat`). The Run 1A selection
-requires a calorimeter cluster and a score above 0.67 (`Mu2eEvtAna` `ConvAna::Run1ATrackID`).
+requires a calorimeter cluster and a score above 0.574 (`Mu2eEvtAna` `ConvAna`, set 79). The selection is still
+being optimized, so the working point is set by `WORKING_POINT` in `pid_tools.py` (or `--wp`).
 
 ## Environment
 
