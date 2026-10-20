@@ -12,6 +12,9 @@ DEFAULT_STUDY = COMBINE_DIR / "rmc_studies" / "mumem_75"  # rmc_constraint_study
 
 # Colors: the fixed order of the analysis RMC plots (validated as a categorical set)
 BLACK, BLUE, ORANGE, GREEN, PINK, GRAY = "#1F1F1F", "#2a78d6", "#eb6834", "#1baf7a", "#e87ba4", "#94a4a2"
+# Process colors of the nominal analysis plots (analysis/datasets.C set_style): RMC external/internal kRed-7/kRed-9,
+# cosmic rays kAzure-4, RPC (combined) kGreen-6
+RMC_EXT, RMC_INT, COSMIC, RPC = "#ff6666", "#ff9999", "#6699ff", "#66cc66"
 
 
 def combine_module(name):

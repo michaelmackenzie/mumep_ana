@@ -1,31 +1,34 @@
 #! /usr/bin/env python3
-"""The radiative muon capture (RMC) photon spectrum on aluminum, as measured from the TRIUMF RMC data (1992 Al
-dataset) in the RMCFits analysis (https://github.com/michaelmackenzie/TRIUMF_RMC_Fits, scripts/fit_plestid.C).
+"""The radiative muon capture (RMC) photon spectrum on aluminum, from the phase-space forward-convolution fit to the
+TRIUMF 1992 Al data in the RMC review paper (RMC-Review, analysis_triumf.tex, Table tab:triumf_plestid_results),
+normalized with the TRIUMF RMC branching fraction.
 
-    python make_rmc_spectrum_plot.py [--result <RMCFits>/data/triumf_plestid_fits/data_1992_Al.root]
+    python make_rmc_spectrum_plot.py
 
-The measured spectrum is the sum of two phase-space shapes, x (1 - x)^n with x = k / kmax, for capture without
-nucleon emission (27Mg final state, kmax = 101.87 MeV, n = 2) and with one emitted neutron (26Mg, kmax = 95.45 MeV,
-n = 3.5). Their fractions are measured for photons above the k = 57 MeV threshold of the fit, so the spectrum is
-drawn above it, normalized to unity there. The band is the 68% uncertainty of the fractions (they sum to one).
+The spectrum is the sum of two phase-space shapes, x (1 - x)^n with x = k / kmax: capture without nucleon emission
+(27Mg final state, kmax = 101.87 MeV, n = 2) and with one emitted neutron (26Mg, kmax = 95.45 MeV, n = 3.5). The
+paper gives their fractions of the spectrum above k = 57 MeV:
+    B(no emission) = (9.9 +- 1.9 (stat) +4.4 -3.4 (syst)) %,   B(one neutron) = 1 - B(no emission)
+and TRIUMF measured the RMC branching fraction above 57 MeV, relative to muon capture, as (1.40 +- 0.11) x 1e-5. The
+spectrum is drawn above 57 MeV as dN_gamma/dk per muon capture. The band is the 68% range of the spectrum, sampling the
+fraction (stat and syst in quadrature, each side as a half-Gaussian) and the branching fraction (Gaussian).
 
-The result is stored below (RESULT). --result reads it from an RMCFits output file instead (the RooWorkspace
-values br_0, br_unc_m_0, br_unc_p_0 of the no-emission component).
-
-Outputs in figures/: rmc_photon_spectrum.{pdf,png} (linear and logarithmic panels).
+Outputs in figures/: rmc_photon_spectrum.{pdf,png} (linear, 57-104 MeV) and rmc_photon_spectrum_log.{pdf,png}
+(logarithmic, 80-104 MeV).
 """
-
-import argparse
 
 import numpy as np
 
 from rmc_tools import BLACK, BLUE, GRAY, ORANGE, save, setup_style
 
-THRESHOLD = 57.   # MeV: the fractions are defined for photons above it
-# RMCFits 1992 Al result (fit range 57-110 MeV), 2026-08-05
-RESULT = {"fraction_0n": 0.098918, "minus": 0.019703, "plus": 0.018531}
-COMPONENTS = (("0n", 101.87, 2.0, r"No nucleon emission ($k_\mathrm{max}$ = 101.87 MeV)", ORANGE, "--"),
-              ("1n", 95.45, 3.5, r"One neutron emitted ($k_\mathrm{max}$ = 95.45 MeV)", BLUE, "-."))
+THRESHOLD = 57.   # MeV: the fractions and the branching fraction are defined for photons above it
+# RMC review paper, phase-space fit to the TRIUMF 1992 Al data: the no-emission fraction above THRESHOLD
+FRACTION_0N = {"value": 0.099, "stat": 0.019, "syst_up": 0.044, "syst_down": 0.034}
+# TRIUMF RMC branching fraction above THRESHOLD, relative to muon capture
+BR_RMC = {"value": 1.40e-5, "error": 0.11e-5}
+COMPONENTS = (("0n", 101.87, 2.0, "No nucleon emission", ORANGE, "--"),
+              ("1n", 95.45, 3.5, "One neutron emitted", BLUE, "-."))
+N_SAMPLES = 100000
 
 
 def shape(k, kmax, n):
@@ -37,56 +40,53 @@ def shape(k, kmax, n):
     return f / np.trapz(xg * (1. - xg) ** n, grid)
 
 
-def read_result(path):
-    import ROOT
-    f = ROOT.TFile.Open(path)
-    w = f.Get("workspace")
-    out = {"fraction_0n": w.var("br_0").getVal(), "minus": w.var("br_unc_m_0").getVal(),
-           "plus": w.var("br_unc_p_0").getVal()}
-    f.Close()
-    return out
+def sample_fraction(rng, n):
+    """The no-emission fraction with stat and syst in quadrature, a half-Gaussian of each width on each side."""
+    f = FRACTION_0N
+    up, down = np.hypot(f["stat"], f["syst_up"]), np.hypot(f["stat"], f["syst_down"])
+    z = rng.normal(0., 1., n)
+    return np.clip(f["value"] + np.where(z >= 0., up, down) * z, 0., 1.), up, down
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--result", default=None, help="RMCFits output file (data_1992_Al.root) to read the result from")
-    args = parser.parse_args()
-    result = read_result(args.result) if args.result else RESULT
-    b, lo, hi = result["fraction_0n"], result["fraction_0n"] - result["minus"], result["fraction_0n"] + result["plus"]
-    print(f"No-emission fraction (k > {THRESHOLD:g} MeV): {b:.4f} -{result['minus']:.4f} +{result['plus']:.4f}")
+    rng = np.random.default_rng(1)
+    b = FRACTION_0N["value"]
+    fractions, up, down = sample_fraction(rng, N_SAMPLES)
+    rates = np.clip(rng.normal(BR_RMC["value"], BR_RMC["error"], N_SAMPLES), 0., None)
+    print(f"No-emission fraction (k > {THRESHOLD:g} MeV): {b:.3f} +{up:.3f} -{down:.3f} (stat + syst); "
+          f"B(RMC, k > {THRESHOLD:g} MeV) = ({BR_RMC['value'] * 1e5:.2f} +- {BR_RMC['error'] * 1e5:.2f}) x 1e-5")
 
-    k = np.linspace(THRESHOLD, 104., 4701)
+    k = np.linspace(THRESHOLD, 104., 2351)
     g = {name: shape(k, kmax, n) for name, kmax, n, *_ in COMPONENTS}
-    total = lambda f: f * g["0n"] + (1. - f) * g["1n"]
-    curves = np.array([total(lo), total(hi)])
-    band_lo, band_hi = curves.min(axis=0), curves.max(axis=0)
+    total = lambda f, r: r * (f * g["0n"] + (1. - f) * g["1n"])
+    samples = rates[:, None] * (fractions[:, None] * g["0n"][None, :] + (1. - fractions[:, None]) * g["1n"][None, :])
+    band_lo, band_hi = np.percentile(samples, [16., 84.], axis=0)
+    nominal = total(b, BR_RMC["value"])
 
     plt = setup_style()
-    fig, axes = plt.subplots(1, 2, figsize=(13, 4.8))
-    for ax, log in zip(axes, (False, True)):
-        ax.fill_between(k, band_lo, band_hi, color=GRAY, alpha=0.5, linewidth=0, label="Uncertainty (68%)")
-        ax.plot(k, total(b), color=BLACK, linewidth=2, label="Total")
+    for log in (False, True):
+        fig, ax = plt.subplots(figsize=(7, 5))
+        ax.fill_between(k, band_lo, band_hi, color=GRAY, alpha=0.5, linewidth=0,
+                        label="Uncertainty (68%, stat. + syst.)")
+        ax.plot(k, nominal, color=BLACK, linewidth=2, label="Total")
         for (name, kmax, n, label, color, style), f in zip(COMPONENTS, (b, 1. - b)):
-            ax.plot(k, f * g[name], color=color, linestyle=style, linewidth=2, label=label)
+            ax.plot(k, BR_RMC["value"] * f * g[name], color=color, linestyle=style, linewidth=2, label=label)
         ax.set_xlabel(r"Photon energy $k$ [MeV]")
-        ax.set_ylabel(r"$(1/N)\,dN/dk$ [MeV$^{-1}$], $k > 57$ MeV")
-        ax.set_xlim(THRESHOLD, 104.)
+        ax.set_ylabel(r"$dN_\gamma/dk$ per muon capture [MeV$^{-1}$]")
         if log:
             ax.set_yscale("log")
-            ax.set_ylim(1e-6, 0.1)
+            ax.set_ylim(1e-11, 1e-6)
             ax.set_xlim(80., 104.)
+            ax.legend(loc="lower left", fontsize=11)
         else:
-            ax.set_ylim(0., 1.45 * total(b).max())
-    axes[0].legend(loc="upper right", fontsize=11)
-    axes[1].text(0.97, 0.95, r"RMC on $^{27}$Al, fit to TRIUMF data", transform=axes[1].transAxes, va="top",
-                 ha="right", fontsize=12)
-    axes[1].text(0.03, 0.05, f"No-emission fraction ($k > {THRESHOLD:g}$ MeV):\n"
-                             f"${b:.3f}^{{+{result['plus']:.3f}}}_{{-{result['minus']:.3f}}}$",
-                 transform=axes[1].transAxes, va="bottom", fontsize=12)
-    fig.tight_layout()
-    save(fig, "rmc_photon_spectrum")
-    plt.close(fig)
-
+            ax.set_xlim(THRESHOLD, 104.)
+            ax.set_ylim(0., 1.45 * nominal.max())
+            ax.legend(loc="upper right", fontsize=11)
+        ax.text(0.97, 0.95 if log else 0.6, r"RMC on $^{27}$Al, fit to TRIUMF data", transform=ax.transAxes, va="top",
+                ha="right", fontsize=12)
+        fig.tight_layout()
+        save(fig, "rmc_photon_spectrum" + ("_log" if log else ""))
+        plt.close(fig)
 
 if __name__ == "__main__":
     main()

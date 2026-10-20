@@ -32,8 +32,8 @@ from pathlib import Path
 
 import numpy as np
 
-from rmc_tools import (BLACK, BLUE, DEFAULT_STUDY, GRAY, GREEN, ORANGE, PINK, chi2_levels, combine_module, save,
-                       setup_style)
+from rmc_tools import (BLACK, BLUE, COSMIC, DEFAULT_STUDY, GRAY, GREEN, ORANGE, RMC_EXT, RMC_INT, RPC, chi2_levels,
+                       combine_module, save, setup_style)
 
 study = combine_module("rmc_constraint_study")
 prescription = combine_module("rmc_sr_prescription")
@@ -129,15 +129,15 @@ def plot_cr_fit(s, plt):
     others = [p for p in processes if p not in rmc and p != "cosmic"]
     total = sum(nominal[p] for p in processes)
     t_lo, t_hi = np.percentile(sum(samples[p] for p in processes), [16., 84.], axis=0)
-    stack = [("Other (RPC, $\\bar{p}$)", sum((nominal[p] for p in others), zero), GREEN),
-             ("Cosmic rays", nominal.get("cosmic", zero), BLUE),
-             ("RMC (external conversion)", nominal.get("rmc_ext", zero), ORANGE),
-             ("RMC (internal conversion)", nominal.get("rmc_int", zero), PINK)]
+    stack = [("Other (RPC, $\\bar{p}$)", sum((nominal[p] for p in others), zero), RPC),
+             ("Cosmic rays", nominal.get("cosmic", zero), COSMIC),
+             ("RMC (external conversion)", nominal.get("rmc_ext", zero), RMC_EXT),
+             ("RMC (internal conversion)", nominal.get("rmc_int", zero), RMC_INT)]
 
     fig, (ax, rax) = plt.subplots(2, 1, figsize=(7, 6.4), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
     cumulative = zero.copy()
     for label, y, color in stack:
-        ax.stairs(cumulative + y, edges, baseline=cumulative, fill=True, color=color, alpha=0.85, label=label)
+        ax.stairs(cumulative + y, edges, baseline=cumulative, fill=True, color=color, label=label)
         cumulative = cumulative + y
     ax.stairs(total, edges, color=BLACK, linewidth=1.2)
     stairs_band(ax, edges, t_lo, t_hi, facecolor="none", edgecolor=BLACK, hatch="////", linewidth=0,

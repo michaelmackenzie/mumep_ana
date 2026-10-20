@@ -18,22 +18,30 @@ cd mumep_ana/studies/eminus_rmc
 ## RMC photon spectrum: `make_rmc_spectrum_plot.py`
 
 ```bash
-python make_rmc_spectrum_plot.py [--result <RMCFits>/data/triumf_plestid_fits/data_1992_Al.root]
+python make_rmc_spectrum_plot.py
 ```
 
-This plot shows the RMC photon spectrum on aluminum, as measured from the TRIUMF 1992 Al data in the RMCFits analysis
-([TRIUMF_RMC_Fits](https://github.com/michaelmackenzie/TRIUMF_RMC_Fits), `scripts/fit_plestid.C`). The spectrum is
-the sum of two phase-space shapes, x(1 - x)^n with x = k / kmax:
+This plot shows the RMC photon spectrum on aluminum. It uses the phase-space forward-convolution fit to the TRIUMF
+1992 Al data in the RMC review paper (RMC-Review, `analysis_triumf.tex`, Table `tab:triumf_plestid_results`). The
+spectrum is the sum of two phase-space shapes, x(1 - x)^n with x = k / kmax:
 
-| Final state | kmax [MeV] | n | Fraction (k > 57 MeV) |
+| Final state | kmax [MeV] | n | Fraction of the spectrum above 57 MeV [%] |
 |---|---|---|---|
-| No nucleon emission (27Mg) | 101.87 | 2 | 0.099 +0.019 -0.020 |
-| One neutron emitted (26Mg) | 95.45 | 3.5 | 1 - the above |
+| No nucleon emission (27Mg) | 101.87 | 2 | 9.9 +- 1.9 (stat) +4.4 -3.4 (syst) |
+| One neutron emitted (26Mg) | 95.45 | 3.5 | 90.1 +- 1.9 (stat) +3.4 -4.4 (syst) |
 
-The fractions are defined for photons above the 57 MeV fit threshold, so the spectrum is drawn above it, normalized
-to unity there. The result is stored in the script. `--result` reads it from an RMCFits output file instead.
+The spectrum is normalized with the RMC branching fraction above 57 MeV, relative to muon capture, measured by TRIUMF:
+(1.40 +- 0.11) x 1e-5. It is drawn above 57 MeV as dN_gamma/dk, the number of RMC photons per muon capture per MeV.
 
-Output: `figures/rmc_photon_spectrum.{pdf,png}`, with linear and logarithmic (80-104 MeV) panels.
+The band is the 68% range from sampling two inputs:
+- the no-emission fraction, with stat and syst added in quadrature and a half-Gaussian of each width on each side
+  (+4.8 / -3.9 %)
+- the branching fraction, as a Gaussian
+
+The inputs are stored in the script (`FRACTION_0N`, `BR_RMC`).
+
+Outputs: `figures/rmc_photon_spectrum.{pdf,png}` (linear scale, 57-104 MeV) and
+`figures/rmc_photon_spectrum_log.{pdf,png}` (logarithmic scale, 80-104 MeV).
 
 ## e+ control region constraint: `make_rmc_constraint_plots.py`
 
