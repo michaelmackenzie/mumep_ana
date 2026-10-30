@@ -16,6 +16,23 @@ from mu2ecombine import Sample, mu2e_physics as phys
 DEFAULT_HIST_PATH = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms"
 DEFAULT_REFERENCE = 1e-15   # branching fraction the signal is normalized to: r is in units of it
 
+# Stopping-target designs: OnSpill (unmixed) signal and DIO samples that replace the nominal Mix1BB mu- --> e- signal
+# and DIO, with the target's stopped muons per POT. The other processes keep their nominal samples; the RMC follows the
+# stops per POT, the RPC (pion stops) does not. "nominal" is the nominal target's OnSpill reference (CeMLeadingLog; there
+# is no CeEndpointOnSpill at au_best_v1_5), the others are the MDC2025ba CeEndpoint samples.
+# Stops per POT = MuBeamCat events per POT (SimEfficiencies2, Sim_best v1_1, run 1430) x mu- stops per resampled
+# MuBeamCat event (MuminusStopsCat events / generated events). The nominal TargetStops (MDC2025ac) kept 1 in 1000 stops,
+# the alternate ones (from the same MuBeamCat files) every stop.
+TARGET_HIST_PATH = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms_alt_target_2026-10-30"
+MUBEAM_PER_POT = 213816 / 1e8
+TARGETS = {
+    # name: signal and DIO (dataset, N(generated), events in the full dataset), mu- stops per resampled MuBeamCat event
+    "nominal":        (("cele1b0s5r0101", 1e7, 4144677), ("dio00b0s5r0101", 25e6, 9386180), 1435092 * 1000 / 4e9),
+    "st37plus6up6dn": (("cele0b0s5r0110", 1e7, 4002040), ("dio00b0s5r0110", 8e6, 2764431), 5856806 / 1e7),
+    "st49hole1to5":   (("cele0b0s5r0120", 1e7, 3967395), ("dio00b0s5r0120", 8e6, 2717026), 6527950 / 1e7),
+    "st49hole9to41":  (("cele0b0s5r0130", 1e7, 3961096), ("dio00b0s5r0130", 8e6, 2700249), 5826669 / 1e7),
+}
+
 
 class Exposure:
     """N(POT), livetime, and stops per POT of a data set.
@@ -23,17 +40,24 @@ class Exposure:
     name:   run1a (28 days of running), run2, mds3c, or mds3d (MDS ensembles, 1BB)
     two_bb: the Run 1A/2 exposure at the 2BB duty cycle and intensity, using the inputs re-weighted to 2BB
             (Mu2eEvtAna histogram mode 2, ConvAna.*.m2.root)
+    target: a stopping-target design of TARGETS (Run 1A at 1BB only): its stops per POT, and its OnSpill signal and
+            DIO samples in make_samples
     """
 
     NAMES = ("run1a", "run2", "mds3c", "mds3d")
 
-    def __init__(self, name="run1a", two_bb=False):
+    def __init__(self, name="run1a", two_bb=False, target=None):
         if name not in self.NAMES:
             raise ValueError(f"unknown exposure '{name}' (available: {', '.join(self.NAMES)})")
         if two_bb and name.startswith("mds"):
             raise ValueError(f"the {name} ensemble is 1BB data, it has no 2BB exposure")
-        self.name, self.two_bb = name, two_bb
-        self.nmuons_per_pot = phys.run1a.nmuons_per_pot
+        if target is not None:
+            if target not in TARGETS:
+                raise ValueError(f"unknown target '{target}' (available: {', '.join(TARGETS)})")
+            if name != "run1a" or two_bb:
+                raise ValueError("the stopping-target samples are only defined for the Run 1A 1BB exposure")
+        self.name, self.two_bb, self.target = name, two_bb, target
+        self.nmuons_per_pot = phys.run1a.nmuons_per_pot if target is None else MUBEAM_PER_POT * TARGETS[target][2]
         self.reference = DEFAULT_REFERENCE
         if name == "run1a":
             # the same wall time at the 2BB duty cycle and N(POT) rate when using the 2BB inputs
@@ -55,14 +79,16 @@ class Exposure:
         return 2 if self.two_bb else 1
 
     def __repr__(self):
-        return (f"Exposure({self.name}{', 2BB' if self.two_bb else ''}: N(POT) = {self.npot:.3e}, "
+        return (f"Exposure({self.name}{', 2BB' if self.two_bb else ''}"
+                f"{f', target {self.target}' if self.target else ''}: N(POT) = {self.npot:.3e}, "
                 f"livetime = {self.livetime:.3e} s, N(muons) = {self.nmuons:.3e})")
 
 
-def make_samples(exposure, hist_path=None):
+def make_samples(exposure, hist_path=None, target_hist_path=None):
     """{name: Sample} of the signal, background, and data inputs, normalized to the exposure. The signal is
     normalized to exposure.reference. hist_path: the histogram directory (default: CONVANA_HIST_PATH, or the
-    analysis histogram directory)."""
+    analysis histogram directory). With exposure.target, the mu- --> e- signal and the DIO are the target's samples,
+    from target_hist_path (default: CONVANA_TARGET_HIST_PATH, or TARGET_HIST_PATH)."""
     hist_path = hist_path or os.environ.get("CONVANA_HIST_PATH") or DEFAULT_HIST_PATH
     npot = exposure.npot
     nmu_per_pot = exposure.nmuons_per_pot
@@ -77,8 +103,8 @@ def make_samples(exposure, hist_path=None):
     rmc_int, rpc_int = phys.rmc_internal_ratio, phys.rpc_internal_ratio
     cosmic_livetime = 4437713.0 * 5.72 / 4.438   # generated livetime x stored-livetime bug correction
 
-    def sample(dataset, weight, expected_events=None, mode=exposure.hist_mode):
-        path = os.path.join(hist_path, f"ConvAna.cnv_ana.{dataset}.m{mode}.root")
+    def sample(dataset, weight, expected_events=None, mode=exposure.hist_mode, path=hist_path):
+        path = os.path.join(path, f"ConvAna.cnv_ana.{dataset}.m{mode}.root")
         return Sample(path, weight=weight, expected_events=expected_events, name=dataset)
 
     # name: dataset, per-event weight (exposure x rate / N(generated)), and events in the full dataset
@@ -95,6 +121,11 @@ def make_samples(exposure, hist_path=None):
         "rpc_int":    sample("rpci1b1s5r0101", npot * rate_rpc * rpc_int / 1.25e8, 1899806),
         "pbar":       sample("pbar1b1s5r0101", npot * phys.run1a.pbar_stops_per_pot / 3e7, 6461314),
     }
+    if exposure.target:
+        target_path = target_hist_path or os.environ.get("CONVANA_TARGET_HIST_PATH") or TARGET_HIST_PATH
+        (signal, signal_gen, signal_events), (dio, dio_gen, dio_events), _ = TARGETS[exposure.target]
+        samples["mumem"] = sample(signal, npot * rate_signal / signal_gen, signal_events, path=target_path)
+        samples["dio"] = sample(dio, npot * rate_dio_95 / dio_gen, dio_events, path=target_path)
     # mu- --> e- keeps a single component per RMC source, taken from the 0 neutron knockout sample
     samples["rmc_ext"] = samples["rmc_ext_0n"]
     samples["rmc_int"] = samples["rmc_int_0n"]

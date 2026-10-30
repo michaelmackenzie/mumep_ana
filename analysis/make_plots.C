@@ -66,7 +66,7 @@ int print_dataset_info(const int selection) {
 }
 
 //---------------------------------------------------------------------------------------------------
-int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dataset = "mds3c", TString tag = "r0105") {
+int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dataset = "", TString tag = "r0106") {
   combine_rmc_ = mumem;
   if(plotter_) {
     delete plotter_;
@@ -146,7 +146,7 @@ int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dat
       c = plotter_->print_stack(plot_t("trkpid"         , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "tracker PID", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("cosmic_id"      , "trk", set, 2, 0.  ,  1.  , 1., -1., logy, false, "Cosmic ID", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("fitCons"        , "trk", set, 5, 0.  ,  1.  , 1., -1., logy, false, "p(#chi^2)", "")); if(!c) ++status; else Empty_Canvas(c);
-      c = plotter_->print_stack(plot_t("fitCons_log"    , "trk", set, 5, -5. ,  1.  , 1., -1., logy, false, "log(p(#chi^2))", "")); if(!c) ++status; else Empty_Canvas(c);
+      c = plotter_->print_stack(plot_t("fitCons_log"    , "trk", set, 5, -10. ,  1.  , 1., -1., logy, false, "log(p(#chi^2))", "")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("clusterE"       , "trk", set, 4, 0.  , 110. , 1., -1., logy, false, "Cluster energy", "MeV/c")); if(!c) ++status; else Empty_Canvas(c);
       c = plotter_->print_stack(plot_t("ep"             , "trk", set, 2, 0.  ,  1.2 , 1., -1., logy, false, "E/p", "")); if(!c) ++status; else Empty_Canvas(c);
       // c = plotter_->print_stack(plot_t("clusterDisk"    , "trk", set, 0, 1.  ,  -1. , 1., -1., logy, false, "Cluster disk", "")); if(!c) ++status; else Empty_Canvas(c);

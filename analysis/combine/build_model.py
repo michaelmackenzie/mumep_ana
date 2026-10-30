@@ -78,7 +78,7 @@ def import_mu2ecombine():
 mc = import_mu2ecombine()
 import ROOT  # noqa: E402  (after mu2ecombine, which may extend sys.path)
 
-from samples import Exposure, make_samples, rate_uncertainties  # noqa: E402
+from samples import TARGETS, Exposure, make_samples, rate_uncertainties  # noqa: E402
 
 ROOT.gROOT.SetBatch(True)
 
@@ -592,6 +592,9 @@ def make_parser():
                         help="exposure (default: run1a, or the data ensemble of --data mds3c/mds3d)")
     parser.add_argument("--2bb", dest="two_bb", action="store_true", default=env_flag("CONVANA_USE_2BB", False),
                         help="2BB exposure, with the inputs re-weighted to 2BB (ConvAna.*.m2.root)")
+    parser.add_argument("--target", default=None, choices=TARGETS,
+                        help="stopping-target design (mumem, Run 1A 1BB): its OnSpill (unmixed) signal and DIO samples "
+                             "and its stops per POT; nominal is the nominal target's OnSpill reference (see samples.py)")
     parser.add_argument("--reference", type=float, default=None,
                         help="branching fraction the signal is normalized to, the unit of r "
                              "(default: 1e-15, 1e-13 for the MDS ensembles)")
@@ -645,6 +648,8 @@ def parse_args(argv=None):
     for o in offsets:
         if o % 1000 or not 1 <= o // 1000 <= 7:
             parser.error(f"control region offset {o} is not a sum of the flags 1000, 2000, and 4000")
+    if args.target and args.process != "mumem":
+        parser.error("--target: the stopping-target samples are mu- --> e- (mumem) samples")
     name = "_".join([args.process] + [str(s) for s in selections] + [f"cr{o}" for o in offsets]
                     + ([args.tag] if args.tag else []))
     args.name = name
@@ -661,7 +666,7 @@ def run(args):
     """Build and write the shape and cut-and-count models of the parsed options. Returns the output directory."""
     outdir = args.output
     exposure_name = args.exposure or (args.data if args.data in ("mds3c", "mds3d") else "run1a")
-    exposure = Exposure(exposure_name, args.two_bb)
+    exposure = Exposure(exposure_name, args.two_bb, args.target)
     if args.reference:
         exposure.reference = args.reference
     if args.data in ("mds3c", "mds3d") and exposure_name != args.data:
@@ -702,6 +707,9 @@ def run(args):
               f"# N(POT): {exposure.npot:.3e}",
               f"# Livetime: {exposure.livetime:.3e}",
               f"# N(muons): {exposure.nmuons:.3e}"]
+    if exposure.target:
+        header.append(f"# Stopping target: {exposure.target} ({exposure.nmuons_per_pot:.4e} stops/POT, OnSpill "
+                      f"signal and DIO: {samples['mumem'].name}, {samples['dio'].name})")
     for ch, r in results.items():
         if "signal" in r.processes:
             header.append(f"# Signal efficiency ({ch}): {r.card_rates['signal'] / n_signal:.3e}")

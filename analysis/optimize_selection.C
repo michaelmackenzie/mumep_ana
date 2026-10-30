@@ -122,11 +122,16 @@ struct Sample_t {
 
 enum {kBoth, kLeft, kRight, kVeto};
 struct Var_t {
+  // For kVeto, [min, max] is the range the veto window may grow into, starting from an empty window at seed
   Var_t(TString name, double min, double max,
-        int type = kBoth) : min(min), max(max),
-                            name(name), type(type) {}
+        int type = kBoth, double seed = std::nan("")) : min(min), max(max), lo(min), hi(max),
+                                                        name(name), type(type) {
+    if(type == kVeto) this->min = this->max = (std::isnan(seed)) ? 0.5*(min + max) : seed;
+  }
   double min;
   double max;
+  double lo; // nominal (search) range
+  double hi;
   TString name;
   int type;
   bool discrete = false;
@@ -193,7 +198,7 @@ double evaluate_norm(TString name, TFile* f, const DatasetInfo_t& info) {
       ntotal += nseen;
     }
     const Long64_t nexpect = info.ndigi_;
-    scale *= nexpect * 1. / nseen; // account for missing events
+    scale *= nexpect * 1. / ntotal; // account for missing events
     if(name == "mumem" || name == "mumep") scale *= 1.e-14; // reasonable Rmue
   } else {
     cout << "Missing norm tree\n";
@@ -223,8 +228,54 @@ std::pair<double,double> evaluate_yields(std::vector<Sample_t>& samples, TString
   return std::pair<double,double>(n_sig, n_bkg);
 }
 
+// Widen a veto window [min, max] within [lo, hi] by one edge until the signal loss reaches the step
+TestPoint_t find_veto_test_point(Var_t& var, std::vector<Var_t>& vars,
+                                 std::vector<Sample_t>& samples, double step) {
+  const double min_0 = var.min;
+  const double max_0 = var.max;
+  TString cut_string = build_cut_string(vars);
+  const auto [n_sig_0, n_bkg_0] = evaluate_yields(samples, cut_string);
+  const bool applied = var.applied;
+  const double tol = 0.1; // tolerance on the efficiency cut
+  var.applied = true;
+
+  double sig[2] = {0., 0.}, edge[2] = {min_0, max_0}, n_sig[2] = {n_sig_0, n_sig_0}, n_bkg[2] = {n_bkg_0, n_bkg_0};
+  for(int side = 0; side < 2; ++side) { // side 0: lower edge, side 1: upper edge
+    double edge_lo = (side == 0) ? var.lo : max_0; // range of the moving edge
+    double edge_hi = (side == 0) ? min_0  : var.hi;
+    double loss = 0.;
+    if(debug_level_ > 1) cout << "    Testing veto side " << side << endl;
+    while(std::fabs(loss - step) > tol*step && (edge_hi - edge_lo) > (var.hi - var.lo)*1.e-4) {
+      const double point = (edge_lo + edge_hi) / 2.;
+      var.min = (side == 0) ? point : min_0;
+      var.max = (side == 1) ? point : max_0;
+      cut_string = build_cut_string(vars);
+      const auto [n_sig_t, n_bkg_t] = evaluate_yields(samples, cut_string);
+      loss = 1. - n_sig_t / n_sig_0;
+      if(debug_level_ > 2) cout << "      Test veto [" << var.min << ", " << var.max << "] loss = "
+                                << loss << endl;
+      sig[side] = (n_bkg_t > 0.) ? get_sig(n_sig_t, n_bkg_t) : 0.;
+      edge[side] = point;
+      n_sig[side] = n_sig_t; n_bkg[side] = n_bkg_t;
+      const bool widen = loss < step;
+      if(side == 0) { if(widen) edge_hi = point; else edge_lo = point; }
+      else          { if(widen) edge_lo = point; else edge_hi = point; }
+    }
+  }
+
+  // Restore the nominal values
+  var.min = min_0;
+  var.max = max_0;
+  var.applied = applied;
+
+  // Return the best point
+  if(sig[0] > sig[1]) return TestPoint_t(edge[0], max_0, n_sig_0, n_bkg_0, n_sig[0], n_bkg[0]);
+  return                     TestPoint_t(min_0, edge[1], n_sig_0, n_bkg_0, n_sig[1], n_bkg[1]);
+}
+
 TestPoint_t find_test_point(Var_t& var, std::vector<Var_t>& vars,
                         std::vector<Sample_t>& samples, double step) {
+  if(var.type == kVeto) return find_veto_test_point(var, vars, samples, step);
   const double min_0 = var.min;
   const double max_0 = var.max;
   TString cut_string = build_cut_string(vars);
@@ -240,7 +291,6 @@ TestPoint_t find_test_point(Var_t& var, std::vector<Var_t>& vars,
   var.applied = true;
 
   // Check each cut direction
-  const bool is_veto = var.type == kVeto;
   for(int side = 0; side < 2; ++side) {
     if(side == 0 && var.type == kRight)  continue;
     if(side == 1 && var.type == kLeft )  continue;
@@ -262,7 +312,7 @@ TestPoint_t find_test_point(Var_t& var, std::vector<Var_t>& vars,
       loss = 1. - n_sig / n_sig_0;
       if(debug_level_ > 2) cout << "      Test point [" << var.min << ", " << var.max << "] loss = "
            << loss << endl;
-      if(side == is_veto) { // if vetoing, invert the assumptions
+      if(side == 0) {
         sig_l = (n_bkg > 0.) ? get_sig(n_sig, n_bkg) : 0.;
         min_l = min_point;
         n_sig_l = n_sig; n_bkg_l = n_bkg;
@@ -307,6 +357,12 @@ std::pair<TGraph*,TGraph*> perform_grid_scan(std::vector<Sample_t>& samples,
     for(const auto& var : vars) {
       auto var_test(var);
       var_test.applied = rnd.Uniform() > 0.5;
+      if(var.type == kVeto) { // random veto window within the search range
+        var_test.min = var.lo + rnd.Uniform()*(var.hi - var.lo);
+        var_test.max = var_test.min + rnd.Uniform()*(var.hi - var_test.min);
+        vars_test.push_back(var_test);
+        continue;
+      }
       if(var.type != kRight) var_test.min = var.min + rnd.Uniform()*(var.max - var.min);
       if(var.type != kLeft ) var_test.max = var.max - rnd.Uniform()*(var.max - var_test.min);
       vars_test.push_back(var_test);
@@ -345,7 +401,8 @@ std::pair<TGraph*,TGraph*> perform_grid_scan(std::vector<Sample_t>& samples,
   return std::pair<TGraph*, TGraph*>(points,sigs);
 }
 
-int optimize_selection(const bool mumem = false, const int base_set = 40) {
+// optimize_crv: drop the ConvAna CRV veto (add the vetoed set, base_set + 1000) and optimize the CRV veto window
+int optimize_selection(const bool mumem = false, const int base_set = 40, const bool optimize_crv = false) {
 
   // Retrieve the relevant backgrounds
   const double pmin = (mumem) ? 101. : 90.;
@@ -355,6 +412,8 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
   set_evtana_defaults();
   init_dataset_info();
   std::vector<TString> names = {(mumem) ? "mumem" : "mumep", "cosmic", "rmc_ext_0n", "rmc_int_0n", "rpc_ext", "rpc_int"};
+  std::vector<int> sets = {base_set};
+  if(optimize_crv) sets.push_back(base_set + 1000); // ConvAna kCRVVetoOffset
   std::vector<Sample_t> samples;
   for(auto name : names) {
     const auto& info = get_dataset_info(name);
@@ -368,26 +427,29 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
       cout << "Dataset " << name << " hist file not found!\n";
       return 1;
     }
-    const char* tpath = Form("%sHist/trs_%i/tree", dir_path_.Data(), base_set);
-    TTree* t = (TTree*) f->Get(tpath);
-    if(!t) {
-      cout << "Dataset " << name << " tree not found! Path = " << tpath << endl;
-      return 1;
+    for(int set : sets) { // each set is a separate sample, so each has its own sub-sampling scale
+      const char* tpath = Form("%sHist/trs_%i/tree", dir_path_.Data(), set);
+      TTree* t = (TTree*) f->Get(tpath);
+      if(!t) {
+        cout << "Dataset " << name << " tree not found! Path = " << tpath << endl;
+        return 1;
+      }
+      gROOT->cd(); // put the copy in gROOT directory
+      // apply momentum window, track charge, and event weight selection
+      const int max_events = (name == "mumem" || name == "mumep") ? 100000 : 1e7; // reduce signal, comes out in the relative S/sqrt(B)
+      const double events_scale = (t->GetEntries() > max_events) ? t->GetEntries() * 1./max_events : 1.;
+      t = t->CopyTree(Form("trk_p < %.2f && trk_p > %.2f && (%s * trk_charge) > 0 && weight > 0.",
+                           pmax, pmin, (mumem) ? "-1" : "1"), "", max_events);
+      if(!t) {
+        cout << "Dataset " << name << " set " << set << " has no events that pass!\n";
+        continue;
+      }
+      const double scale = events_scale*evaluate_norm(name, f, info);
+      samples.push_back(Sample_t(f, t, scale*info.theory_, name));
+      samples.back().signal = name == "mumem" || name == "mumep";
+      cout << name << " (set " << set << "): N(entries) = " << t->GetEntries() << " scale = " << scale
+           << " yield = " << evaluate_yield(samples.back(), "1") << endl;
     }
-    gROOT->cd(); // put the copy in gROOT directory
-    // apply momentum window, track charge, and event weight selection
-    const int max_events = (name == "mumem" || "mumep") ? 100000 : 1e7; // reduce signal, comes out in the relative S/sqrt(B)
-    const double events_scale = (t->GetEntries() > max_events) ? t->GetEntries() * 1./max_events : 1.;
-    t = t->CopyTree(Form("trk_p < %.2f && trk_p > %.2f && (%s * trk_charge) > 0 && weight > 0.",
-                         pmax, pmin, (mumem) ? "-1" : "1"), "", max_events);
-    if(!t) {
-      cout << "Dataset " << name << " has no events that pass!\n";
-      continue;
-    }
-    const double scale = events_scale*evaluate_norm(name, f, info);
-    samples.push_back(Sample_t(f, t, scale*info.theory_, name));
-    samples.back().signal = name == "mumem" || name == "mumep";
-    cout << name << ": N(entries) = " << t->GetEntries() << " scale = " << scale << " yield = " << evaluate_yield(samples.back(), "1") << endl;
   }
 
   // Define the list of variables to test
@@ -402,6 +464,10 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
   vars.push_back(Var_t("trk_pid"       ,  -1.,    1., kLeft));
   if(!mumem) vars.push_back(Var_t("trk_trkonlypid",  -1.,    1., kLeft));
   // vars.push_back(Var_t("trk_csmid"     ,  -1.,    1., kLeft));
+  if(optimize_crv) { // track - CRV cluster time vetoes, starting in the cosmic peaks (no cluster: -10000, never vetoed)
+    vars.push_back(Var_t("trk_crv_dt"    , -150.,  150., kVeto, -10.)); // via the calo/ST, closest cluster
+    vars.push_back(Var_t("trk_crv_raw_dt", -100.,  300., kVeto,  35.)); // raw cluster time, closest cluster
+  }
 
   // Validate the variables
   for(auto& var : vars) {
@@ -422,6 +488,7 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
 
   // File to output results into
   TString tag = (mumem) ? "mumem" : "mumep";
+  if(optimize_crv) tag += "_crv";
   TString f_out = "cut_strings_" + tag + ".txt";
   gSystem->Exec(Form("[ -f %s ] && rm %s; touch %s",
                      f_out.Data(), f_out.Data(), f_out.Data()));
@@ -438,17 +505,23 @@ int optimize_selection(const bool mumem = false, const int base_set = 40) {
   const double end_eff = (mumem) ? 0.3 : 0.8;
   while(eff > end_eff) {
     std::vector<TestPoint_t> candidates;
-    size_t index = 0;
+    int index = -1;
     double sig_best(0.), grad_best(-1.e10);
     for(auto& var : vars) {
       if(debug_level_ > 1) cout << "  Testing var " << var.name << endl;
       candidates.push_back(find_test_point(var, vars, samples, eff_step));
-      if((use_grad && candidates.back().grad > grad_best) ||
+      if(candidates.back().n_sig >= candidates.back().n_sig_0) continue; // cut can't be tightened further
+      if(index < 0 ||
+         (use_grad && candidates.back().grad > grad_best) ||
          (!use_grad && candidates.back().sig > sig_best)) {
         sig_best = candidates.back().sig;
         grad_best = candidates.back().grad;
         index = candidates.size() - 1;
       }
+    }
+    if(index < 0) {
+      cout << "No cut can be tightened further, stopping\n";
+      break;
     }
     // Update with the best cut
     vars[index].min = candidates[index].min;

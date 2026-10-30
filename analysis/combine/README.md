@@ -134,6 +134,25 @@ regions keep the MC backgrounds. Building the envelope takes a few minutes.
 - Yield scale factors, frozen at 1: `yieldScale` for all processes and `scale_<process>`. Set them when running
   Combine, e.g. `--setParameters scale_dio=2,scale_cosmic=0.5` or `yieldScale=2`.
 
+### Stopping-target designs
+
+`--target <name>` (mumem, Run 1A 1BB) replaces the signal and DIO by the OnSpill (unmixed) samples of a
+stopping-target design and sets N(muons) from its stops per POT (`TARGETS` in `samples.py`):
+
+```bash
+./full_loop.py -p mumem -s "75" -t nominal_onspill --target nominal   # reference: nominal target, OnSpill
+./full_loop.py -p mumem -s "75" -t st49hole1to5 --target st49hole1to5
+```
+
+- Designs: `st37plus6up6dn` (37 foils + 6 upstream and 6 downstream), `st49hole1to5`, `st49hole9to41` (49 foils
+  with 1-5 or 9-41 mm holes), all MDC2025ba CeEndpoint/DIOtail95, and `nominal`, the nominal target's OnSpill
+  reference (CeMLeadingLog, as there is no CeEndpointOnSpill at `au_best_v1_5`). Compare a design with `nominal`,
+  not with the default (Mix1BB) model.
+- The histograms are read from `CONVANA_TARGET_HIST_PATH` (default: `TARGET_HIST_PATH` in `samples.py`).
+- Stops per POT: MuBeamCat events per POT (`SimEfficiencies2`) x mu- stops per resampled MuBeamCat event
+  (`MuminusStopsCat` events / generated events; the nominal `TargetStops` were prescaled by 1000, the alternate ones
+  not). The other processes keep their nominal Mix1BB samples; the RMC follows the stops per POT, the RPC does not.
+
 ### Cut-and-count model
 
 `cc/` holds a one-bin model per channel: the momentum window maximizing S/sqrt(S + B) in a signal region, the full
