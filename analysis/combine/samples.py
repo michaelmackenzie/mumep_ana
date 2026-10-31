@@ -18,16 +18,16 @@ DEFAULT_REFERENCE = 1e-15   # branching fraction the signal is normalized to: r 
 
 # Stopping-target designs: OnSpill (unmixed) signal and DIO samples that replace the nominal Mix1BB mu- --> e- signal
 # and DIO, with the target's stopped muons per POT. The other processes keep their nominal samples; the RMC follows the
-# stops per POT, the RPC (pion stops) does not. "nominal" is the nominal target's OnSpill reference (CeMLeadingLog; there
-# is no CeEndpointOnSpill at au_best_v1_5), the others are the MDC2025ba CeEndpoint samples.
+# stops per POT, the RPC (pion stops) does not. All are MDC2025ba CeEndpoint and DIOtail95 samples; "nominal" is the
+# nominal target, with the nominal stops per POT.
 # Stops per POT = MuBeamCat events per POT (SimEfficiencies2, Sim_best v1_1, run 1430) x mu- stops per resampled
 # MuBeamCat event (MuminusStopsCat events / generated events). The nominal TargetStops (MDC2025ac) kept 1 in 1000 stops,
 # the alternate ones (from the same MuBeamCat files) every stop.
-TARGET_HIST_PATH = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms_alt_target_2026-10-30"
+TARGET_HIST_PATH = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms_alt_target_2026-10-31"
 MUBEAM_PER_POT = 213816 / 1e8
 TARGETS = {
     # name: signal and DIO (dataset, N(generated), events in the full dataset), mu- stops per resampled MuBeamCat event
-    "nominal":        (("cele1b0s5r0101", 1e7, 4144677), ("dio00b0s5r0101", 25e6, 9386180), 1435092 * 1000 / 4e9),
+    "nominal":        (("cele0b0s5r0101", 1e7, 4247008), ("dio00b0s5r0101", 8e6, 2995328), 1435092 * 1000 / 4e9),
     "st37plus6up6dn": (("cele0b0s5r0110", 1e7, 4002040), ("dio00b0s5r0110", 8e6, 2764431), 5856806 / 1e7),
     "st49hole1to5":   (("cele0b0s5r0120", 1e7, 3967395), ("dio00b0s5r0120", 8e6, 2717026), 6527950 / 1e7),
     "st49hole9to41":  (("cele0b0s5r0130", 1e7, 3961096), ("dio00b0s5r0130", 8e6, 2700249), 5826669 / 1e7),

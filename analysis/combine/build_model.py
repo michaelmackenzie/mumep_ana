@@ -4,9 +4,11 @@
     python3 build_model.py -p mumep -s "40" [-c "1000 4000"] [-t <tag>] [options]
 
 Writes models/<process>_<sets>[_cr<offset>...][_<tag>]/ (or --output): the shape model (combined.txt, a card per
-channel, shapes/, model.json, commands.sh, figures/) and the cut-and-count model in cc/. Run Combine on the cards
-directly, e.g. with the commands in commands.sh. Every channel is written as a RooWorkspace on its observable
-obs_<set>, so any model of the same channels (templates, functions, envelope) can generate the data another fits.
+channel, shapes/, model.json, commands.sh, figures/) and the cut-and-count model in cc/ (counting cards without shapes:
+the shape uncertainties become rate uncertainties in the window, and the signal efficiency is the window's). Run
+Combine on the cards directly, e.g. with the commands in commands.sh. Every channel of the shape model is written as a
+RooWorkspace on its observable obs_<set>, so any model of the same channels (templates, functions, envelope) can
+generate the data another fits.
 
 --only PROCESS builds and fits only that process (to develop or debug its shape), draws it to <output>/debug/, and
 exits without writing a model.
@@ -51,6 +53,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import sys
 
 import numpy as np
@@ -131,6 +134,16 @@ TITLES = {"signal": {"mumem": "#mu^{-}#rightarrowe^{-}", "mumep": "#mu^{-}#right
 def title(process, component):
     t = TITLES.get(component, component)
     return t[process] if isinstance(t, dict) else t
+
+
+def color(component):
+    """The figure color of a component, as in the stack plots (analysis/datasets.C set_style); None for the
+    figure palette."""
+    colors = {"signal": ROOT.kBlue, "dio": ROOT.kMagenta - 10, "cosmic": ROOT.kAzure - 4, "pbar": ROOT.kMagenta - 3,
+              "rpc_ext": ROOT.kGreen - 6, "rpc_int": ROOT.kGreen - 9, "rmc_ext": ROOT.kRed - 7,
+              "rmc_ext_0n": ROOT.kRed - 7, "rmc_ext_1n": ROOT.kRed - 5, "rmc_int": ROOT.kRed - 9,
+              "rmc_int_0n": ROOT.kRed - 9, "rmc_int_1n": ROOT.kRed - 8}
+    return colors.get(component)
 
 
 def background_components(process, region):
@@ -356,7 +369,21 @@ def new_model(args, name):
     # functions, envelope) can generate data for the others
     model = mc.Model(name, poi_range=tuple(args.poi_range), workspace=True)
     model.mc_stats(enabled=args.mc_stat)
+    model.figure_label = getattr(args, "figure_label", None)
     return model
+
+
+def figure_label(exposure):
+    """The stack figure header, as the legacy Mu2e_lumi (analysis/tools/utilities.C): the Mu2e label, and the beam
+    power, running time, and muon stops of the exposure."""
+    duty_cycle = mc.mu2e_physics.duty_cycle_2bb if exposure.two_bb else mc.mu2e_physics.duty_cycle_1bb
+    running = exposure.livetime / duty_cycle
+    power = 8. * 1.602176634e-10 * exposure.npot / running / 1000.   # 8 GeV protons, kW
+    days = running / 86400.
+    period = f"{days / 365.:.0f} years" if days > 365. else f"{days:.0f} days"
+    exponent = int(np.floor(np.log10(exposure.nmuons)))
+    stops = f"{exposure.nmuons / 10 ** exponent:.1f} x 10^{{{exponent}}} muon stops"
+    return "#bf{Mu2e} #it{Simulation}", f"{power:.3g} kW beam; {period} running; {stops}"
 
 
 def rmc_spectrum_variation(sample, name, selection):
@@ -396,7 +423,7 @@ def define_model(args, samples, regions, data=None, envelope=True):
     processes = set()
     for ch, region in regions.items():
         edges = channel_edges(region)
-        obs = mc.observable(f"obs_{region.selection}", edges=edges, title="p [MeV/c]")
+        obs = mc.observable(f"obs_{region.selection}", edges=edges, title="Momentum (MeV/c)")
         KEEP.append(obs)
         use_envelope = envelope and args.envelope and not region.is_control
         channel = model.channel(ch, obs, data=data.get(ch), blind=BLIND[args.process] if region.has_signal else None)
@@ -417,7 +444,7 @@ def define_model(args, samples, regions, data=None, envelope=True):
                     variations[name] = (mc.rebin_to(up, edges), mc.rebin_to(down, edges), "shape_only")
                 if variations:
                     shape.variations = mc.shapes.as_variations(variations)
-            channel.add(comp, shape, signal=comp == "signal", title=title(args.process, comp))
+            channel.add(comp, shape, signal=comp == "signal", title=title(args.process, comp), color=color(comp))
             processes.add(comp)
         if use_envelope:
             # the envelope absorbs every MC background; it is only used where the signal is fit
@@ -459,7 +486,7 @@ def narrowed_model(args, full, inputs, regions):
         lo = int(np.argmin(np.abs(edges - region.xmin)))
         hi = int(np.argmin(np.abs(edges - region.xmax)))
         sub = edges[lo:hi + 1]
-        obs = mc.observable(f"obs_{region.selection}", edges=sub, title="p [MeV/c]")
+        obs = mc.observable(f"obs_{region.selection}", edges=sub, title="Momentum (MeV/c)")
         KEEP.append(obs)
         data = None
         if r.data_source == "data":
@@ -479,7 +506,8 @@ def narrowed_model(args, full, inputs, regions):
             if h.Integral() <= 0.:
                 print(f"  {ch}/{p}: no expected events in {region.xmin:g}-{region.xmax:g}, not modeled")
                 continue
-            channel.add(p, h, signal=r.channel.processes[p].signal, title=r.channel.processes[p].title)
+            channel.add(p, h, signal=r.channel.processes[p].signal, title=r.channel.processes[p].title,
+                        color=r.channel.processes[p].color)
             narrow_inputs[ch][p] = h
             processes.add(p)
         if args.envelope and not region.is_control:
@@ -523,9 +551,47 @@ def window(signal, background, optimize):
     return best
 
 
+def window_kappas(r, p, lo, hi):
+    """{nuisance: (k_up, k_down)}: the shape uncertainties of process p of a built channel as rate factors of the
+    window [lo, hi), from the yields of its up/down templates (or of its fitted PDF at theta = +-1) in the window."""
+    nominal = float(r.expected[p][lo:hi].sum())
+    names = dict.fromkeys(e[0] for e in r.effects if e[2] == p and e[1] in ("shape", "ws") and e[0] not in r.free_params)
+    if nominal <= 0. or not names:
+        return {}
+    if p in r.pdfs:
+        from mu2ecombine.pdfs import bin_fractions
+        pdf, norm, obs, edges = r.pdfs[p], r.norms.get(p), r.channel.obs, r.channel.edges
+        thetas = {v.GetName(): v for v in pdf.getVariables()}
+        if norm is not None:
+            thetas.update({v.GetName(): v for v in norm.getVariables()})
+    out = {}
+    for name in names:
+        if p in r.pdfs:
+            theta = thetas[name]
+            yields = []
+            for value in (1., -1.):
+                theta.setVal(value)
+                k = norm.getVal() if norm is not None else 1.
+                yields.append(float(bin_fractions(pdf, obs, edges)[lo:hi].sum()) * r.card_rates[p] * k)
+            theta.setVal(0.)
+        else:
+            yields = [float(mc.hist.arrays(r.templates[f"{p}_{name}{d}"])[1][lo:hi].sum()) for d in ("Up", "Down")]
+        kappas = [y / nominal for y in yields]
+        if all(abs(k - 1.) < 1e-4 for k in kappas):
+            continue
+        if min(kappas) <= 0.:
+            print(f"  {r.channel.name}/{p}: WARNING: a {name} variation has no events in the window; its rate factor "
+                  "is set to 0.001")
+            kappas = [max(k, 1e-3) for k in kappas]
+        out[name] = tuple(kappas)
+    return out
+
+
 def counting_model(args, results, inputs, regions):
     """Cut-and-count model: one bin per channel, the momentum window maximizing S / sqrt(S + B) in a signal region
-    and the full range in a control region, with the shape model's expected yields in it."""
+    and the full range in a control region, with the shape model's expected yields in it. The shape uncertainties
+    become log-normal rate uncertainties: their up/down yield ratios in the window (constrained, unit-Gaussian, even
+    where the shape model gives them a flat prior; a log-normal cannot be unconstrained)."""
     model = new_model(args, f"{args.name}_cc")
     windows = {}
     processes = set()
@@ -538,7 +604,7 @@ def counting_model(args, results, inputs, regions):
         edges = r.channel.edges
         xlo, xhi = float(edges[lo]), float(edges[hi])
         windows[ch] = (xlo, xhi)
-        obs = mc.observable(f"obs_{region.selection}_cc", edges=[xlo, xhi], title="p [MeV/c]")
+        obs = mc.observable(f"obs_{region.selection}_cc", edges=[xlo, xhi], title="Momentum (MeV/c)")
         KEEP.append(obs)
         data = None
         if r.data_source == "data":
@@ -553,19 +619,28 @@ def counting_model(args, results, inputs, regions):
                 total = values[lo:hi].sum()
                 rel = np.sqrt(variances[lo:hi].sum()) / total if total > 0. else 0.
             channel.add(p, mc.hist.make([xlo, xhi], [yield_], [(rel * yield_) ** 2], p),
-                        signal=r.channel.processes[p].signal, title=r.channel.processes[p].title)
+                        signal=r.channel.processes[p].signal, title=r.channel.processes[p].title,
+                        color=r.channel.processes[p].color)
             processes.add(p)
+            for name, (k_up, k_down) in window_kappas(r, p, lo, hi).items():
+                model.lnN(name, (k_up, k_down), processes=p, channels=ch)
+                print(f"    {p}: {name} -> lnN {k_down:.4f}/{k_up:.4f}")
         print(f"  {ch}: counting window {xlo:.2f}-{xhi:.2f} MeV/c, N(signal) = {signal[lo:hi].sum():.4f}, "
               f"N(background) = {bkg[lo:hi].sum():.4f}")
     common_terms(args, model, results, processes)
     return model, windows
 
 
-def write(model, outdir, plots, results=None):
+def write(model, outdir, plots, results=None, shapes=True):
     """Write the model, reusing already built results (Model.write builds the model itself otherwise)."""
     if results is not None:
         model.build = lambda: results
-    return model.write(outdir, plots=plots)
+    return model.write(outdir, plots=plots, shapes=shapes)
+
+
+def efficiency_lines(results, n_signal):
+    return [f"# Signal efficiency ({ch}): {r.card_rates['signal'] / n_signal:.3e}" for ch, r in results.items()
+            if "signal" in r.processes]
 
 
 def finish_cards(outdir, header):
@@ -673,6 +748,7 @@ def run(args):
         print(f"build_model.py: WARNING: the {args.data} data with the {exposure_name} exposure")
     samples = make_samples(exposure, args.hist_path)
     print(exposure, f"signal reference {exposure.reference:.1e}")
+    args.figure_label = figure_label(exposure)
 
     regions = {}
     for s in args.selection_list:
@@ -710,18 +786,18 @@ def run(args):
     if exposure.target:
         header.append(f"# Stopping target: {exposure.target} ({exposure.nmuons_per_pot:.4e} stops/POT, OnSpill "
                       f"signal and DIO: {samples['mumem'].name}, {samples['dio'].name})")
-    for ch, r in results.items():
-        if "signal" in r.processes:
-            header.append(f"# Signal efficiency ({ch}): {r.card_rates['signal'] / n_signal:.3e}")
-    finish_cards(outdir, header)
+    finish_cards(outdir, header + efficiency_lines(results, n_signal))
 
     if not args.no_cc:
         print("Cut-and-count model:")
         cc_model, windows = counting_model(args, results, inputs, regions)
+        cc_results = cc_model.build()
         cc_dir = os.path.join(outdir, "cc")
-        write(cc_model, cc_dir, False)
-        finish_cards(cc_dir, header + [f"# Window ({ch}): {lo:.2f} - {hi:.2f} MeV/c" for ch, (lo, hi)
-                                       in windows.items()])
+        shutil.rmtree(os.path.join(cc_dir, "shapes"), ignore_errors=True)   # from cards written with shapes
+        write(cc_model, cc_dir, False, cc_results, shapes=False)
+        # the signal efficiency in the counting window
+        finish_cards(cc_dir, header + efficiency_lines(cc_results, n_signal)
+                     + [f"# Window ({ch}): {lo:.2f} - {hi:.2f} MeV/c" for ch, (lo, hi) in windows.items()])
     print(f"Model written to {outdir}: combined.txt" + ("" if args.no_cc else ", cc/combined.txt (cut-and-count)"))
     return outdir
 
