@@ -9,6 +9,24 @@ int debug_level_ = 0;
 const bool use_asimov_  = false; // use Asimov significance instead of S/sqrt(B)
 const bool use_combine_ = false;
 
+// Stopping-target designs, as in combine/samples.py TARGETS: unmixed OnSpill CeEndpoint signal and DIO samples
+// (dataset, N(generated), events in the full dataset) and the mu- stops per resampled MuBeamCat event
+struct TargetInfo_t {
+  TString name;
+  TString signal; double signal_gen; Long64_t signal_events;
+  TString dio;    double dio_gen;    Long64_t dio_events;
+  double stops_per_draw;
+};
+const std::vector<TargetInfo_t> targets_ = {
+  {"nominal"       , "cele0b0s5r0101", 1e7, 4247008, "dio00b0s5r0101", 8e6, 2995328, 1435092 * 1000. / 4e9},
+  {"st37plus6up6dn", "cele0b0s5r0110", 1e7, 4002040, "dio00b0s5r0110", 8e6, 2764431, 5856806 / 1e7},
+  {"st49hole1to5"  , "cele0b0s5r0120", 1e7, 3967395, "dio00b0s5r0120", 8e6, 2717026, 6527950 / 1e7},
+  {"st49hole9to41" , "cele0b0s5r0130", 1e7, 3961096, "dio00b0s5r0130", 8e6, 2700249, 5826669 / 1e7},
+};
+const double mubeam_per_pot_ = 213816 / 1e8; // MuBeamCat events per POT
+TString target_hist_path_ = (gSystem->Getenv("CONVANA_TARGET_HIST_PATH")) ? TString(gSystem->Getenv("CONVANA_TARGET_HIST_PATH")) + "/"
+                                                                          : TString("/exp/mu2e/data/projects/run1a/mumep_ana/histograms_alt_target_2026-10-31/");
+
 
 double getCombine(double S, double B) {
   // Print a temporary card
@@ -134,9 +152,16 @@ struct Var_t {
   double hi;
   TString name;
   int type;
-  bool discrete = false;
+  bool discrete = false; // integer-valued: cut edges sit on half-integers and move in whole units
   bool applied = false;
 };
+
+// Integer-valued variable taking values in [min, max] (not for kVeto)
+Var_t discrete_var(TString name, int min, int max, int type = kBoth) {
+  Var_t var(name, min - 0.5, max + 0.5, type);
+  var.discrete = true;
+  return var;
+}
 
 struct TestPoint_t {
   TestPoint_t(double min, double max,
@@ -273,9 +298,61 @@ TestPoint_t find_veto_test_point(Var_t& var, std::vector<Var_t>& vars,
   return                     TestPoint_t(min_0, edge[1], n_sig_0, n_bkg_0, n_sig[1], n_bkg[1]);
 }
 
+// Move an edge of a discrete variable inwards by whole units: the largest move with a signal loss within the
+// step, or the smallest move that loses signal if a single unit already exceeds it (loss jumps between values)
+TestPoint_t find_discrete_test_point(Var_t& var, std::vector<Var_t>& vars,
+                                     std::vector<Sample_t>& samples, double step) {
+  const double min_0 = var.min;
+  const double max_0 = var.max;
+  TString cut_string = build_cut_string(vars);
+  const auto [n_sig_0, n_bkg_0] = evaluate_yields(samples, cut_string);
+  const bool applied = var.applied;
+  var.applied = true;
+
+  double sig[2] = {0., 0.}, edge[2] = {min_0, max_0}, n_sig[2] = {n_sig_0, n_sig_0}, n_bkg[2] = {n_bkg_0, n_bkg_0};
+  const int n_max = std::lround(max_0 - min_0) - 1; // largest move that keeps one value
+  for(int side = 0; side < 2; ++side) { // side 0: lower edge, side 1: upper edge
+    if(side == 0 && var.type == kRight) continue;
+    if(side == 1 && var.type == kLeft ) continue;
+    if(n_max < 1) continue;
+    auto evaluate = [&](int n) { // yields with the edge moved inwards by n units
+      var.min = (side == 0) ? min_0 + n : min_0;
+      var.max = (side == 1) ? max_0 - n : max_0;
+      return evaluate_yields(samples, build_cut_string(vars));
+    };
+    // Binary search for the largest move with loss <= step, using that the loss grows with the move
+    int lo = 0, hi = n_max;
+    if(1. - evaluate(n_max).first / n_sig_0 <= step) lo = n_max;
+    while(hi - lo > 1) {
+      const int mid = (lo + hi) / 2;
+      if(1. - evaluate(mid).first / n_sig_0 <= step) lo = mid;
+      else                                           hi = mid;
+    }
+    int n = lo;
+    std::pair<double,double> yields = evaluate(n);
+    if(yields.first >= n_sig_0 && n < n_max) yields = evaluate(++n); // no signal lost yet: one more unit
+    if(debug_level_ > 2) cout << "      Test discrete [" << var.min << ", " << var.max << "] loss = "
+                              << 1. - yields.first / n_sig_0 << endl;
+    sig[side] = (yields.second > 0.) ? get_sig(yields.first, yields.second) : 0.;
+    edge[side] = (side == 0) ? var.min : var.max;
+    n_sig[side] = yields.first; n_bkg[side] = yields.second;
+  }
+
+  // Restore the nominal values
+  var.min = min_0;
+  var.max = max_0;
+  var.applied = applied;
+
+  // Return the best point
+  const bool left = var.type == kLeft || (var.type == kBoth && sig[0] > sig[1]);
+  if(left) return TestPoint_t(edge[0], max_0, n_sig_0, n_bkg_0, n_sig[0], n_bkg[0]);
+  return          TestPoint_t(min_0, edge[1], n_sig_0, n_bkg_0, n_sig[1], n_bkg[1]);
+}
+
 TestPoint_t find_test_point(Var_t& var, std::vector<Var_t>& vars,
                         std::vector<Sample_t>& samples, double step) {
   if(var.type == kVeto) return find_veto_test_point(var, vars, samples, step);
+  if(var.discrete) return find_discrete_test_point(var, vars, samples, step);
   const double min_0 = var.min;
   const double max_0 = var.max;
   TString cut_string = build_cut_string(vars);
@@ -363,6 +440,12 @@ std::pair<TGraph*,TGraph*> perform_grid_scan(std::vector<Sample_t>& samples,
         vars_test.push_back(var_test);
         continue;
       }
+      if(var.discrete) { // whole-unit edges, keeping at least one value
+        if(var.type != kRight) var_test.min = var.min + rnd.Integer(std::lround(var.max - var.min));
+        if(var.type != kLeft ) var_test.max = var.max - rnd.Integer(std::lround(var.max - var_test.min));
+        vars_test.push_back(var_test);
+        continue;
+      }
       if(var.type != kRight) var_test.min = var.min + rnd.Uniform()*(var.max - var.min);
       if(var.type != kLeft ) var_test.max = var.max - rnd.Uniform()*(var.max - var_test.min);
       vars_test.push_back(var_test);
@@ -402,7 +485,10 @@ std::pair<TGraph*,TGraph*> perform_grid_scan(std::vector<Sample_t>& samples,
 }
 
 // optimize_crv: drop the ConvAna CRV veto (add the vetoed set, base_set + 1000) and optimize the CRV veto window
-int optimize_selection(const bool mumem = false, const int base_set = 40, const bool optimize_crv = false) {
+// target: stopping-target design of targets_ (mu- --> e- only). The signal and DIO are the target's unmixed OnSpill
+//         samples, normalized to its stops per POT (also applied to the RMC), using set 81 (see optimize_target_selection)
+int optimize_selection(const bool mumem = false, const int base_set = 40, const bool optimize_crv = false,
+                       const TString target = "", const int ngrid_tests = 1e4) {
 
   // Retrieve the relevant backgrounds
   const double pmin = (mumem) ? 101. : 90.;
@@ -412,8 +498,41 @@ int optimize_selection(const bool mumem = false, const int base_set = 40, const 
   set_evtana_defaults();
   init_dataset_info();
   std::vector<TString> names = {(mumem) ? "mumem" : "mumep", "cosmic", "rmc_ext_0n", "rmc_int_0n", "rpc_ext", "rpc_int"};
+
+  // Stopping-target study: replace the signal and add the DIO with the target's samples
+  const bool do_target = target != "";
+  if(do_target) {
+    if(!mumem) {
+      cout << "The stopping-target study is only defined for mu- --> e-\n";
+      return 1;
+    }
+    const TargetInfo_t* tgt = nullptr;
+    for(const auto& t : targets_) if(t.name == target) tgt = &t;
+    if(!tgt) {
+      cout << "Target \"" << target << "\" not found!\n";
+      return 1;
+    }
+    const double nmu_per_pot = mubeam_per_pot_ * tgt->stops_per_draw;
+    const double rate_sig = muon_capture_fraction_*nmu_per_pot;
+    const double rate_dio_95 = (1.-muon_capture_fraction_)*nmu_per_pot*dio_frac_95_;
+    datasets_["mumem"] = DatasetInfo_t(tgt->signal_gen, tgt->signal_events, 0., 1., rate_sig   , tgt->signal);
+    datasets_["dio"]   = DatasetInfo_t(tgt->dio_gen   , tgt->dio_events   , 0., 1., rate_dio_95, tgt->dio   );
+    for(TString rmc : {"rmc_ext_0n", "rmc_int_0n"}) datasets_[rmc].theory_ *= nmu_per_pot / nmuons_per_pot_; // RMC follows the stops
+    names.insert(names.begin() + 1, "dio");
+    printf("Target %s: stops/POT = %.4g (Run 1A default %.4g)\n", target.Data(), nmu_per_pot, nmuons_per_pot_);
+  }
+
+  // Selection applied to all samples that isn't optimized
+  TString preselection = Form("trk_p < %.2f && trk_p > %.2f && (%s * trk_charge) > 0 && weight > 0.",
+                              pmax, pmin, (mumem) ? "-1" : "1");
+  if(do_target) { // set 81 has no material, cluster, or CRV requirements; the ST intersection cuts are left out
+    preselection += " && trk_cluster > 0. && trk_opa == 0 && trk_ntsda == 0";
+    if(!optimize_crv) preselection += " && !(trk_crv_raw_dt > 0. && trk_crv_raw_dt < 150.)"; // closest CRV cluster
+  }
+  cout << "Preselection: " << preselection << endl;
+
   std::vector<int> sets = {base_set};
-  if(optimize_crv) sets.push_back(base_set + 1000); // ConvAna kCRVVetoOffset
+  if(optimize_crv && !do_target) sets.push_back(base_set + 1000); // ConvAna kCRVVetoOffset (set 81 is not CRV vetoed)
   std::vector<Sample_t> samples;
   for(auto name : names) {
     const auto& info = get_dataset_info(name);
@@ -421,8 +540,9 @@ int optimize_selection(const bool mumem = false, const int base_set = 40, const 
       cout << "Dataset \"" << name << "\" not found!\n";
       return 1;
     }
-    TFile* f = TFile::Open(Form("%sConvAna.%s.%s.m%i.%s", hist_path_, hist_func_,
-                                info.name_.Data(), hist_mode_, file_type_.Data()), "READ");
+    const bool target_sample = do_target && (name == "mumem" || name == "dio");
+    TFile* f = TFile::Open(Form("%sConvAna.%s.%s.m%i.%s", (target_sample) ? target_hist_path_.Data() : hist_path_,
+                                hist_func_, info.name_.Data(), hist_mode_, file_type_.Data()), "READ");
     if(!f) {
       cout << "Dataset " << name << " hist file not found!\n";
       return 1;
@@ -438,8 +558,7 @@ int optimize_selection(const bool mumem = false, const int base_set = 40, const 
       // apply momentum window, track charge, and event weight selection
       const int max_events = (name == "mumem" || name == "mumep") ? 100000 : 1e7; // reduce signal, comes out in the relative S/sqrt(B)
       const double events_scale = (t->GetEntries() > max_events) ? t->GetEntries() * 1./max_events : 1.;
-      t = t->CopyTree(Form("trk_p < %.2f && trk_p > %.2f && (%s * trk_charge) > 0 && weight > 0.",
-                           pmax, pmin, (mumem) ? "-1" : "1"), "", max_events);
+      t = t->CopyTree(preselection, "", max_events);
       if(!t) {
         cout << "Dataset " << name << " set " << set << " has no events that pass!\n";
         continue;
@@ -464,6 +583,13 @@ int optimize_selection(const bool mumem = false, const int base_set = 40, const 
   vars.push_back(Var_t("trk_pid"       ,  -1.,    1., kLeft));
   if(!mumem) vars.push_back(Var_t("trk_trkonlypid",  -1.,    1., kLeft));
   // vars.push_back(Var_t("trk_csmid"     ,  -1.,    1., kLeft));
+  if(do_target) { // remaining set 75/79 variables (trk_cos covers tan(dip)); no ST intersection or boundary cuts
+    vars.push_back(Var_t("trk_d0"        , -150.,  150.));
+    vars.push_back(Var_t("trk_t0err"     ,   0.,    2., kRight));
+    vars.push_back(discrete_var("trk_nactive", 10, 60, kLeft));
+    // vars.push_back(discrete_var("trk_opa"    ,  0,  1, kRight)); // OPA intersection flag
+    // vars.push_back(discrete_var("trk_ntsda"  ,  0,  5, kRight)); // N(TSDA intersections)
+  }
   if(optimize_crv) { // track - CRV cluster time vetoes, starting in the cosmic peaks (no cluster: -10000, never vetoed)
     vars.push_back(Var_t("trk_crv_dt"    , -150.,  150., kVeto, -10.)); // via the calo/ST, closest cluster
     vars.push_back(Var_t("trk_crv_raw_dt", -100.,  300., kVeto,  35.)); // raw cluster time, closest cluster
@@ -488,6 +614,7 @@ int optimize_selection(const bool mumem = false, const int base_set = 40, const 
 
   // File to output results into
   TString tag = (mumem) ? "mumem" : "mumep";
+  if(do_target) tag += "_tgt_" + target;
   if(optimize_crv) tag += "_crv";
   TString f_out = "cut_strings_" + tag + ".txt";
   gSystem->Exec(Form("[ -f %s ] && rm %s; touch %s",
@@ -502,7 +629,7 @@ int optimize_selection(const bool mumem = false, const int base_set = 40, const 
   double max_sig = 0.;
   const double eff_step = (use_combine_) ? 0.03 : (mumem) ? 0.01 : 0.005; // aim for 1% efficiency steps
   const bool use_grad = true; // use gradient or just significance
-  const double end_eff = (mumem) ? 0.3 : 0.8;
+  const double end_eff = (mumem) ? 0.5 : 0.8;
   while(eff > end_eff) {
     std::vector<TestPoint_t> candidates;
     int index = -1;
@@ -546,8 +673,7 @@ int optimize_selection(const bool mumem = false, const int base_set = 40, const 
   }
 
   // Do a random grid test
-  const int ntests = 1e4;
-  auto [grid_points, grid_sigs] = perform_grid_scan(samples, vars_grid, n_bkg_0, n_sig_0, ntests,
+  auto [grid_points, grid_sigs] = perform_grid_scan(samples, vars_grid, n_bkg_0, n_sig_0, ngrid_tests,
                                                     &points
                                                     );
 
@@ -595,4 +721,10 @@ int optimize_selection(const bool mumem = false, const int base_set = 40, const 
   c.SaveAs("roc_grid_ " + tag + ".png");
 
   return 0;
+}
+
+// Stopping-target study: mu- --> e- selection without the ST intersection/boundary cuts, starting from set 81
+// (trigger, upstream and multi-track vetoes, p > 100 MeV/c) with the target's unmixed signal and DIO samples
+int optimize_target_selection(const TString target = "nominal", const bool optimize_crv = false) {
+  return optimize_selection(true, 81, optimize_crv, target);
 }
