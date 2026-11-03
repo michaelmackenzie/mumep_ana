@@ -14,6 +14,7 @@ does the statistics.
 - `sensitivity_vs_fit_range.py`: expected sensitivity vs. the momentum fit range.
 - `envelope_scans.py`: likelihood scans of r for each envelope function and with the index profiled.
 - `sensitivity_vs_livetime.py`: expected sensitivity vs. a livetime scale factor.
+- `bias_test.py`: signal strength bias of one model on toys generated from another (or closure on its own toys).
 - `rmc_constraint_study.py`: the RMC rate and spectrum power measured in the e+ control region.
 - `rmc_sr_prescription.py`: the RMC normalization and shape uncertainties for the e- signal region, from that measurement.
 - `selection_comparisons.py`: Asimov expected limits of several models (shape and cut-and-count, with and without
@@ -240,6 +241,27 @@ Asimov data set with the generation card at each scale, and fits it with the fit
 ```bash
 python3 sensitivity_vs_livetime.py models/mumep_40_env/combined.txt --gen-card models/mumep_40_hists/combined.txt
 ```
+
+## Signal bias test
+
+`bias_test.py` generates toys from one model and fits them with another (FitDiagnostics), and plots the fitted r and
+its pull with `../tools/plot_combine_fits.C`. With one card, the model is fit to its own toys (closure):
+
+```bash
+./bias_test.py models/mumep_40_r0106_hists/combined.txt models/mumep_40_r0106_env/combined.txt   # template vs. envelope
+./bias_test.py models/mumem_75_r0106_hists/combined.txt -t 500 --expect-signal 10               # closure, with signal
+```
+
+- Outputs go to `bias_tests/<tag>/` (`-o`): the toys, `fitDiagnostics.<tag>.root`, the figure `<tag>.png`, and the
+  Combine and ROOT logs in `logs/`. The tag defaults to `bias_<gen model>_vs_<fit model>` or `closure_<model>`.
+- `-t` toys (1000), `-s` seed, `--expect-signal` the generated r (in units of the generation card; converted to the fit
+  card's units if their signal references differ), `--r-range` the fit range [-r, r] of r (800).
+- The fits use the settings of `legacy/combine_bias_test.sh` (minimizer strategy 1, pre-fit scan, the discrete
+  profiling options) and skip the background-only fit, which the plot does not use. A generation card with an envelope
+  generates from its default function unless `--gen-params` sets its index.
+- `--gen-params`/`--fit-params` (`--setParameters`) and `-G/--gen-args`, `-F/--fit-args` pass options to Combine, e.g.
+  `-G --toysFrequentist`. `--skip-bad-fits` and `--err-mode` are passed to the plotting macro. `--skip-generate`
+  reuses the toys of an earlier run, `--plot-only` remakes the figure, and `--dry-run` prints the commands.
 
 ## RMC rate and spectrum power from the control region
 
