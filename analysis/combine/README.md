@@ -11,6 +11,7 @@ does the statistics.
 - `build_model.py`: builds and writes one model, the shape model and the cut-and-count model.
 - `full_loop.py`: builds the model and optionally tests it with Combine.
 - `selection_test.py`: sensitivity test of a tightened selection (with `make_selection_hists.C`).
+- `alt_target_study.py`: stopping-target design comparison over several selections, including category splits.
 - `sensitivity_vs_fit_range.py`: expected sensitivity vs. the momentum fit range.
 - `envelope_scans.py`: likelihood scans of r for each envelope function and with the index profiled.
 - `sensitivity_vs_livetime.py`: expected sensitivity vs. a livetime scale factor.
@@ -154,6 +155,21 @@ stopping-target design and sets N(muons) from its stops per POT (`TARGETS` in `s
   (`MuminusStopsCat` events / generated events; the nominal `TargetStops` were prescaled by 1000, the alternate ones
   not). The other processes keep their nominal Mix1BB samples; the RMC follows the stops per POT, the RPC does not.
 
+`alt_target_study.py` reruns the whole comparison: every design in `TARGETS` against `nominal`, for each selection test,
+through `selection_test.py --target` (template-model Asimov and envelope limits). Runs with a `summary.txt` are reused,
+so rerunning it only fills in what is missing (`--force` redoes them, `--table-only` remakes the tables):
+
+```bash
+./alt_target_study.py                          # outputs in alt_target_tests/: results.txt, results.csv, logs/
+./alt_target_study.py --tests "s89 cat_d0" --targets "nominal st49hole1to5" --jobs 4
+```
+
+The tests (`TESTS` in the script): `ref75` (ConvAna set 75), `s89` (set 81 trees with the common alternate-target
+cuts of ConvAna set 89 and the CRV veto from the tree), `s89_d0open` (s89 without its upper d0 cut), and the
+two-category tests `cat_cos` (s89 split at cos(theta) = 0.68) and `cat_d0` (s89_d0open split at d0 = 100 mm). The
+tables give each limit, its change relative to the nominal target, and for the category tests the change relative to
+their single-category selection.
+
 ### Cut-and-count model
 
 `cc/` holds a one-bin model per channel: the momentum window maximizing S/sqrt(S + B) in a signal region, the full
@@ -177,6 +193,16 @@ The window is recorded in the card header. `--no-cc` skips it.
 The limits are written to `test_hists/<tag>/summary.txt`, with the logs in `logs/` and the Combine outputs in
 `combine/`. Use `-p`/`-s`/`-c` for other processes, sets, and control regions, `--model-args` and `--fit-args` to pass
 options to `build_model.py` and Combine, and `--skip-hists`/`--skip-models` to reuse earlier steps.
+
+`--categories "CUT1; CUT2; ..."` splits each selection set `S` into channels of one model: category `i` (from 1) is
+filled from the tree of `S` into set `S + 100 i` (channel `set_<S + 100 i>`; with `--crv-from-tree` its CRV-tagged
+copy goes to `S + 100 i + 1000`), e.g. a split by polar angle that keeps the cosmic-rich forward tracks apart:
+
+```bash
+./selection_test.py "<cuts>" cos_split -p mumem -s 81 --crv-from-tree --categories "trk_cos > 0.68; trk_cos <= 0.68"
+```
+
+The category sets must be free set numbers below 1000 (not one of ConvAna's sets).
 
 ## Sensitivity vs. fit range
 
@@ -239,8 +265,16 @@ overlays the curves as -2 Delta ln L:
 Asimov data set with the generation card at each scale, and fits it with the fit card:
 
 ```bash
-python3 sensitivity_vs_livetime.py models/mumep_40_env/combined.txt --gen-card models/mumep_40_hists/combined.txt
+python3 sensitivity_vs_livetime.py models/mumep_40_env/combined.txt --gen-card models/mumep_40_hists/combined.txt -j 10
 ```
+
+- The livetime plots show the running time in weeks, scale factor x `--nominal-weeks` (default 4, the 28 days of
+  Run 1A), with the nominal running time marked.
+- `-j/--threads N` runs N scale points in parallel. Each Combine job is limited to one thread, so N is the number of
+  cores used.
+- Outputs: the Combine files, `logs/` and the results table `results.json` go in `livetime_scans/<tag>/` (`-o`), and
+  the figures (PNG and PDF) in `figures/livetime/<tag>/` (`--fig-dir`). The tag defaults to the fit card name (`-T`).
+  `--plot-only` remakes the figures from `results.json`.
 
 ## Signal bias test
 

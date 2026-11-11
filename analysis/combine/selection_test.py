@@ -13,7 +13,8 @@ histogram-template model and an envelope model, and fit the envelope model to th
 
 Options: --crv-from-tree (sets without a CRV veto or CRV-tagged copy, e.g. 81: veto from trk_crv_raw_dt, and the
 inverted veto fills S+1000, which only gives build_model.py the cosmic shape), --target NAME (mu- --> e- signal and DIO of
-a stopping-target design, also re-filled), --no-limits, --work-dir DIR (test_hists/ and models/ go there), --datasets.
+a stopping-target design, also re-filled), --categories "CUT1; CUT2" (split each set S into the channels S + 100,
+S + 200, ... of one model, e.g. "trk_cos > 0.68; trk_cos <= 0.68"), --no-limits, --work-dir DIR (test_hists/ and models/ go there), --datasets.
 Example, a target design with set 81 (no CRV in the tree selection), models only:
 
     ./selection_test.py "trk_cluster > 0. && trk_opa == 0 && trk_ntsda == 0 && <cuts>" tgt85 -p mumem -s "81" \\
@@ -33,6 +34,9 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Base selection sets defined in Mu2eEvtAna's ConvAna (hist_sets): --categories does not write to these
+CONVANA_SETS = {0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 20, 21, 22, 23, 24, 25, 30, 31, 34, 35, 40, 41, 42,
+                43, 45, 46, 47, 50, 60, 62, 65, 66, 73, 74, 75, 77, 78, 79, 80, 81, 85, 86, 87, 88, 89}
 
 
 def read_samples():
@@ -83,6 +87,8 @@ def main():
     parser.add_argument("--no-limits", action="store_true", help="build the histograms and models, skip Combine")
     parser.add_argument("--work-dir", default=HERE, help="base directory of test_hists/ and models/ (default: here)")
     parser.add_argument("--datasets", default="", help="dataset keys to re-fill, quoted (default: all)")
+    parser.add_argument("--categories", default="", help="';'-separated category cuts: each selection set S is split "
+                        "into the channels S + 100, S + 200, ... with the cuts, e.g. \"trk_cos > 0.68; trk_cos <= 0.68\"")
     parser.add_argument("--skip-hists", action="store_true", help="use the existing test_hists/<tag>/ histograms")
     parser.add_argument("--skip-models", action="store_true", help="use the existing models")
     args = parser.parse_args()
@@ -99,19 +105,40 @@ def main():
     os.makedirs(combdir, exist_ok=True)
     selections = args.selections.split()
     offsets = args.control_regions.split()
-    sets = [str(int(s) + int(o)) for s in selections for o in ["0"] + offsets]
+    categories = [c.strip() for c in args.categories.split(";") if c.strip()]
+    # The model sets: the selection sets, or with categories set S + 100 i for category i (from 1) of set S
+    model_selections = selections
+    if categories:
+        model_selections = [str(int(s) + 100 * (i + 1)) for s in selections for i in range(len(categories))]
+        for m in model_selections:
+            if int(m) >= 1000 or int(m) in CONVANA_SETS:
+                parser.error(f"--categories: category set {m} is not a free set below 1000")
+    # (input set, output set, category cut) of each re-filled set, control-region sets included
+    fills = []
+    for s in selections:
+        for i, cat in enumerate(categories or [None]):
+            out = int(s) + (100 * (i + 1) if categories else 0)
+            fills += [(int(s) + int(o), out + int(o), cat) for o in ["0"] + offsets]
+    sets = [str(out) for _, out, _ in fills]
     print(f">>> Selection test {args.tag}: \"{args.selection}\" on sets {' '.join(sets)}")
+    for s in selections if categories else []:
+        for i, cat in enumerate(categories):
+            print(f"    category {i + 1}: set {s} --> set {int(s) + 100 * (i + 1)}: {cat}")
 
     # 1) Dataset histograms with the test selection
     if not args.skip_hists:
         cut = args.selection.replace('"', '\\"')
-        tokens, set_cuts = list(sets), []
-        if args.crv_from_tree:
-            # the CRV veto from the closest cluster time difference: S gets the veto, S+1000 the inverted veto
-            tagged = "(trk_crv_raw_dt > 0. && trk_crv_raw_dt < 150.)"
-            for s in sets:
-                tokens.append(f"{s}>{int(s) + 1000}")
-                set_cuts += [f"{s}:!{tagged}", f"{int(s) + 1000}:{tagged}"]
+        both = lambda *cuts: " && ".join(f"({c})" for c in cuts if c)
+        tokens, set_cuts = [], []
+        for src, out, cat in fills:
+            tokens.append(str(out) if src == out else f"{src}>{out}")
+            if args.crv_from_tree:
+                # the CRV veto from the closest cluster time difference: S gets the veto, S+1000 the inverted veto
+                tagged = "(trk_crv_raw_dt > 0. && trk_crv_raw_dt < 150.)"
+                tokens.append(f"{src}>{out + 1000}")
+                set_cuts += [f"{out}:{both(cat, '!' + tagged)}", f"{out + 1000}:{both(cat, tagged)}"]
+            elif cat:
+                set_cuts.append(f"{out}:{both(cat)}")
         set_cuts = ";".join(set_cuts).replace('"', '\\"')
         tail = f', "{set_cuts}"' if set_cuts else ""
         macro = f'make_selection_hists.C("{" ".join(tokens)}", "{cut}", "{outdir}"'
@@ -129,10 +156,11 @@ def main():
             print("\n".join(line for line in text.splitlines() if "selected" in line))
 
     # 2) Template and envelope models
-    name = "_".join([args.process] + selections + [f"cr{o}" for o in offsets])
+    name = "_".join([args.process] + model_selections + [f"cr{o}" for o in offsets])
     hists_dir = os.path.join(work, "models", f"{name}_{args.tag}_hists")
     env_dir = os.path.join(work, "models", f"{name}_{args.tag}_env")
-    common = (f"{shlex.quote(sys.executable)} build_model.py -p {args.process} -s {shlex.quote(args.selections)} "
+    common = (f"{shlex.quote(sys.executable)} build_model.py -p {args.process} "
+              f"-s {shlex.quote(' '.join(model_selections))} "
               f"--hist-path {shlex.quote(outdir)} --no-cc --exposure run1a")
     if args.target:
         common = f"CONVANA_TARGET_HIST_PATH={shlex.quote(outdir)} {common} --target {args.target}"
@@ -156,6 +184,7 @@ def main():
     # 3) Limits
     if args.no_limits:
         lines = [f"tag            : {args.tag}", f"selection      : {args.selection}", f"sets           : {' '.join(sets)}",
+                 *[f"category {m:6s}: {c}" for m, c in zip(model_selections, categories * len(selections))],
                  f"hists model    : {hists_dir}", f"env model      : {env_dir}", "limits         : skipped (--no-limits)"]
         with open(os.path.join(outdir, "summary.txt"), "w") as f:
             f.write("\n".join(lines) + "\n")
@@ -186,6 +215,7 @@ def main():
     lines = [f"tag            : {args.tag}",
              f"selection      : {args.selection}",
              f"sets           : {' '.join(sets)}",
+             *[f"category {m:6s}: {c}" for m, c in zip(model_selections, categories * len(selections))],
              f"hists model    : {hists_dir}",
              f"env model      : {env_dir}",
              f"{args.cl} CL limits on r:",
