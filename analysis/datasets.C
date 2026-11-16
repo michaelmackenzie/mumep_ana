@@ -106,7 +106,9 @@ void init_dataset_info() {
     datasets_["data_mds2c"] = DatasetInfo_t(1.    , 5597655, 0.,   1., 1., "mds2cb1s5r0001", "dig.mu2e.ensembleMDS2cMix1BBTriggerable.MDC2020ba_best_v1_3.art"     );
     datasets_["data_mds3c"] = DatasetInfo_t(1.    , 4863968, 0.,   1., 1., "mds3cb1s5r0102", "dig.mu2e.ensembleMDS3cMix1BB.MDC2025am_best_v1_1.art"                );
   } else { // EventNtuple inputs
+    // Nominal tracker:
     datasets_["mumem"]      = DatasetInfo_t(1e7       , 4141125, 0.,   1., rate_sig                     , "cele1b1s5r0101", "nts.mu2e.CeMLeadingLogMix1BB.MDC2025au_best_v1_1.root"  );
+    4122379 / 10000000
     datasets_["mumep"]      = DatasetInfo_t(1e7       , 3235878, 0.,   1., rate_sig                     , "cpos1b1s5r0101", "nts.mu2e.CePLeadingLogMix1BB.MDC2025au_best_v1_1.root"  );
     datasets_["cosmic"]     = DatasetInfo_t(t_cry4ab1 , 4155435, 0.,   1.,       1.                     , "cry4ab1s5r0101", "nts.mu2e.CosmicSignalMix1BB.MDC2025au_best_v1_1.root"   );
     datasets_["dio"]        = DatasetInfo_t(25e6      , 9368976, 0.,   1., rate_dio_95                  , "dio00b1s5r0101", "nts.mu2e.DIOtail95Mix1BB.MDC2025au_best_v1_1.root"      );
@@ -121,6 +123,9 @@ void init_dataset_info() {
     // (mumep models the 0n and 1n components separately, see rmc_components)
     datasets_["rmc_ext"] = datasets_["rmc_ext_0n"];
     datasets_["rmc_int"] = datasets_["rmc_int_0n"];
+
+    // Reduced tracker:
+    datasets_["mumem"]      = DatasetInfo_t(1e7       , 4122379, 0.,   1., rate_sig                     , "cele1b1s5r0102", "nts.mu2e.CeMLeadingLogMix1BB.MDC2025bd_best_v2_0.root"  );
 
     datasets_["data_mds3c"] = DatasetInfo_t(1.    , 4921433, 0.,   1., 1., "mds3cb1s5r0100", "nts.mu2e.ensembleMDS3cMix1BB.MDC2025ar_best_v1_1.root"              );
     datasets_["data_mds3d"] = DatasetInfo_t(1.    , 9837962, 0.,   1., 1., "mds3db0s5r0100", "nts.mu2e.ensembleMDS3dOnSpill.MDC2025au_best_v1_1-001.root"         );

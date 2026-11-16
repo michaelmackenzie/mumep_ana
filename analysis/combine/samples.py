@@ -110,6 +110,7 @@ def make_samples(exposure, hist_path=None, target_hist_path=None):
     # name: dataset, per-event weight (exposure x rate / N(generated)), and events in the full dataset
     samples = {
         "mumem":      sample("cele1b1s5r0101", npot * rate_signal / 1e7, 4141125),
+        # "mumem":      sample("cele1b1s5r0102", npot * rate_signal / 1e7, 4122379), # Testing reduced tracker config
         "mumep":      sample("cpos1b1s5r0101", npot * rate_signal / 1e7, 3235878),
         "cosmic":     sample("cry4ab1s5r0101", exposure.livetime / cosmic_livetime, 4155435),
         "dio":        sample("dio00b1s5r0101", npot * rate_dio_95 / 25e6, 9368976),

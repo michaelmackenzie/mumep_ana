@@ -15,6 +15,8 @@ does the statistics.
 - `sensitivity_vs_fit_range.py`: expected sensitivity vs. the momentum fit range.
 - `envelope_scans.py`: likelihood scans of r for each envelope function and with the index profiled.
 - `sensitivity_vs_livetime.py`: expected sensitivity vs. a livetime scale factor.
+- `rmc_assumption_scan.py`: median expected limit when the RMC 0n/1n knockout split (B(0)) and the internal conversion
+  rate are shifted, through the `scale_rmc_*` rateParams (mumep models).
 - `bias_test.py`: signal strength bias of one model on toys generated from another (or closure on its own toys).
 - `rmc_constraint_study.py`: the RMC rate and spectrum power measured in the e+ control region.
 - `rmc_sr_prescription.py`: the RMC normalization and shape uncertainties for the e- signal region, from that measurement.
