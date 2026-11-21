@@ -15,6 +15,7 @@ from mu2ecombine import Sample, mu2e_physics as phys
 
 DEFAULT_HIST_PATH = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms"
 DEFAULT_REFERENCE = 1e-15   # branching fraction the signal is normalized to: r is in units of it
+REDUCED_TRACKER   = True
 
 # Stopping-target designs: OnSpill (unmixed) signal and DIO samples that replace the nominal Mix1BB mu- --> e- signal
 # and DIO, with the target's stopped muons per POT. The other processes keep their nominal samples; the RMC follows the
@@ -108,20 +109,34 @@ def make_samples(exposure, hist_path=None, target_hist_path=None):
         return Sample(path, weight=weight, expected_events=expected_events, name=dataset)
 
     # name: dataset, per-event weight (exposure x rate / N(generated)), and events in the full dataset
-    samples = {
-        "mumem":      sample("cele1b1s5r0101", npot * rate_signal / 1e7, 4141125),
-        # "mumem":      sample("cele1b1s5r0102", npot * rate_signal / 1e7, 4122379), # Testing reduced tracker config
-        "mumep":      sample("cpos1b1s5r0101", npot * rate_signal / 1e7, 3235878),
-        "cosmic":     sample("cry4ab1s5r0101", exposure.livetime / cosmic_livetime, 4155435),
-        "dio":        sample("dio00b1s5r0101", npot * rate_dio_95 / 25e6, 9368976),
-        "rmc_ext_0n": sample("rmce0b1s5r0101", npot * rate_rmc_0n_80 / 7e9, 4967393),
-        "rmc_ext_1n": sample("rmce1b1s5r0101", npot * rate_rmc_1n_80 / 7e9, 2974188),
-        "rmc_int_0n": sample("rmci0b1s5r0101", npot * rate_rmc_0n_80 * rmc_int / 5e7, 1229006),
-        "rmc_int_1n": sample("rmci1b1s5r0101", npot * rate_rmc_1n_80 * rmc_int / 5e7, 517029),
-        "rpc_ext":    sample("rpce1b1s5r0101", npot * rate_rpc / 5e9, 458818),
-        "rpc_int":    sample("rpci1b1s5r0101", npot * rate_rpc * rpc_int / 1.25e8, 1899806),
-        "pbar":       sample("pbar1b1s5r0101", npot * phys.run1a.pbar_stops_per_pot / 3e7, 6461314),
-    }
+    if REDUCED_TRACKER:  # reduced tracker configuration for Run 1
+        samples = {
+            "mumem":      sample("cele1b1s5r0102", npot * rate_signal / 1e7                  , 4126584),
+            "mumep":      sample("cpos1b1s5r0102", npot * rate_signal / 1e7                  , 3214876),
+            "cosmic":     sample("cry4ab1s5r0102", exposure.livetime / cosmic_livetime       , 4141826),
+            "dio":        sample("dio00b1s5r0102", npot * rate_dio_95 / 25e6                 , 9323791),
+            "rmc_ext_0n": sample("rmce0b1s5r0102", npot * rate_rmc_0n_80 / 7e9               , 4962417),
+            "rmc_ext_1n": sample("rmce1b1s5r0102", npot * rate_rmc_1n_80 / 7e9               , 2972496),
+            "rmc_int_0n": sample("rmci0b1s5r0102", npot * rate_rmc_0n_80 * rmc_int / 5e7     , 1211523),
+            "rmc_int_1n": sample("rmci1b1s5r0102", npot * rate_rmc_1n_80 * rmc_int / 5e7     ,  507998),
+            "rpc_ext":    sample("rpce1b1s5r0102", npot * rate_rpc / 5e9                     ,  477976),
+            "rpc_int":    sample("rpci1b1s5r0102", npot * rate_rpc * rpc_int / 1.25e8        , 1910423),
+            "pbar":       sample("pbar1b1s5r0102", npot * phys.run1a.pbar_stops_per_pot / 3e7, 6306269),
+        }
+    else:
+        samples = {
+            "mumem":      sample("cele1b1s5r0101", npot * rate_signal / 1e7                  , 4141125),
+            "mumep":      sample("cpos1b1s5r0101", npot * rate_signal / 1e7                  , 3235878),
+            "cosmic":     sample("cry4ab1s5r0101", exposure.livetime / cosmic_livetime       , 4155435),
+            "dio":        sample("dio00b1s5r0101", npot * rate_dio_95 / 25e6                 , 9368976),
+            "rmc_ext_0n": sample("rmce0b1s5r0101", npot * rate_rmc_0n_80 / 7e9               , 4967393),
+            "rmc_ext_1n": sample("rmce1b1s5r0101", npot * rate_rmc_1n_80 / 7e9               , 2974188),
+            "rmc_int_0n": sample("rmci0b1s5r0101", npot * rate_rmc_0n_80 * rmc_int / 5e7     , 1229006),
+            "rmc_int_1n": sample("rmci1b1s5r0101", npot * rate_rmc_1n_80 * rmc_int / 5e7     ,  517029),
+            "rpc_ext":    sample("rpce1b1s5r0101", npot * rate_rpc / 5e9                     ,  458818),
+            "rpc_int":    sample("rpci1b1s5r0101", npot * rate_rpc * rpc_int / 1.25e8        , 1899806),
+            "pbar":       sample("pbar1b1s5r0101", npot * phys.run1a.pbar_stops_per_pot / 3e7, 6461314),
+        }
     if exposure.target:
         target_path = target_hist_path or os.environ.get("CONVANA_TARGET_HIST_PATH") or TARGET_HIST_PATH
         (signal, signal_gen, signal_events), (dio, dio_gen, dio_events), _ = TARGETS[exposure.target]
