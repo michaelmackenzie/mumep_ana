@@ -36,3 +36,5 @@ studies/*/outputs
 *.swap
 analysis/combine/models
 analysis/combine/rmc_studies
+#Selection optimization outputs (optimize_selection_fast.C, combine/test_candidates.py)
+analysis/optimize/
