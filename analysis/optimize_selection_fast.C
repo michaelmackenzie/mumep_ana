@@ -18,6 +18,7 @@
 #include <numeric>
 
 int debug_level_ = 0;
+TString dir_ = "optimize/";
 
 // Figure of merit
 enum {kSOverSqrtB, kAsimovZ, kExpectedUL};
@@ -858,13 +859,16 @@ int optimize_selection_fast(const bool mumem = false, const int base_set = 45, c
     return std::array<double,3>{s / n_sig_0_test, get_sig(s, b) / sig_0_test, get_inv_limit(s, b) / lim_0_test};
   };
 
-  // File to output results into
+  // Output directory: <dir_><tag>/ (optimize/<tag>/ in the working directory by default)
   TString tag = (mumem) ? "mumem" : "mumep";
   if(do_target) tag += "_tgt_" + target;
   if(optimize_crv) tag += "_crv";
-  TString f_out = "cut_strings_" + tag + ".txt";
-  TString f_val = "cut_validation_" + tag + ".txt";
-  TString f_starts = "cut_strings_" + tag + "_starts.txt";
+  const TString out_dir = dir_ + tag;
+  gSystem->mkdir(out_dir, true);
+  printf("Writing the results to %s/\n", out_dir.Data());
+  TString f_out = out_dir + "/cut_strings.txt";
+  TString f_val = out_dir + "/cut_validation.txt";
+  TString f_starts = out_dir + "/cut_strings_starts.txt";
   for(TString f : {f_out, f_val, f_starts}) gSystem->Exec(Form("[ -f %s ] && rm %s; touch %s", f.Data(), f.Data(), f.Data()));
   gSystem->Exec(Form("echo \"# eff_train sig_train inv_limit_train eff_test sig_test inv_limit_test"
                      " (significance and 1 / expected limit relative to the preselection)\" >> %s", f_val.Data()));
@@ -875,7 +879,7 @@ int optimize_selection_fast(const bool mumem = false, const int base_set = 45, c
 
   // Greedy path, optimized on the train half
   timer.Start();
-  const double eff_step = (use_combine_) ? 0.03 : (mumem) ? 0.01 : 0.005; // aim for 1% efficiency steps
+  const double eff_step = (use_combine_) ? 0.03 : (mumem) ? 0.01 : 0.002; // aim for 1% efficiency steps
   const double end_eff = (mumem) ? 0.3 : 0.8;
   const auto path = run_greedy(vars, train, n_sig_0, eff_step, end_eff);
   double max_sig(0.), max_lim(0.);
@@ -1002,17 +1006,17 @@ int optimize_selection_fast(const bool mumem = false, const int base_set = 45, c
   lims_test.SetLineColor(kBlue+2);
   lims_test.Draw("L");
   points.GetXaxis()->SetRangeUser(0., 1.1);
-  points.GetYaxis()->SetRangeUser(0., 1.1);
+  points.GetYaxis()->SetRangeUser(0., 1.4);
   points.SetTitle(";Signal efficiency;Rejection, relative S/#sqrt{B} and 1/limit");
   c.SetGrid();
-  TLegend leg(0.12, 0.12, 0.55, 0.40);
+  TLegend leg(0.12, 0.75, 0.88, 0.89); leg.SetNColumns(3);
   leg.AddEntry(&points   , "Background rejection", "L");
   leg.AddEntry(&sigs     , "S/#sqrt{B} (train)", "L");
   leg.AddEntry(&sigs_test, "S/#sqrt{B} (test)", "L");
-  leg.AddEntry(&lims     , "1 / expected 90% CL limit (train)", "L");
-  leg.AddEntry(&lims_test, "1 / expected 90% CL limit (test)", "L");
+  leg.AddEntry(&lims     , "1 / expected limit (train)", "L");
+  leg.AddEntry(&lims_test, "1 / expected limit (test)", "L");
   leg.Draw();
-  c.SaveAs("roc_" + tag + ".png");
+  c.SaveAs(out_dir + "/roc.png");
 
   gStyle->SetOptStat(0);
   TH1* haxis = new TH1F("haxis","",1,0.,1.1);
@@ -1029,7 +1033,7 @@ int optimize_selection_fast(const bool mumem = false, const int base_set = 45, c
   leg_p.AddEntry(&points    , "Greedy selection", "L");
   leg_p.AddEntry(grid_points, "Random selection", "P");
   leg_p.Draw();
-  c.SaveAs("roc_grid_ " + tag + ".png");
+  c.SaveAs(out_dir + "/roc_grid.png");
 
   return 0;
 }
