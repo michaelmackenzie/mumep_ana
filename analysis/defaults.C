@@ -1,10 +1,11 @@
 #ifndef __CONVANA_ANALYSIS_DEFAULTS__
 #define __CONVANA_ANALYSIS_DEFAULTS__
 
-// Histogram directory, overridden by the CONVANA_HIST_PATH environment variable (e.g. for make_selection_hists.C outputs)
-TString      hist_path_str_ = (gSystem->Getenv("CONVANA_HIST_PATH")) ? TString(gSystem->Getenv("CONVANA_HIST_PATH")) + "/"
-                                                                       : TString("/exp/mu2e/data/projects/run1a/mumep_ana/histograms/");
-const char*  hist_path_   = hist_path_str_.Data();
+// Histogram directories, set by combine/samples.py (export_to_root: DEFAULT_HIST_PATH and TARGET_HIST_PATH, or the
+// CONVANA_HIST_PATH and CONVANA_TARGET_HIST_PATH environment variables), with a trailing '/'
+TString      hist_path_str_     = "";
+const char*  hist_path_         = hist_path_str_.Data();
+TString      target_hist_path_  = ""; // stopping-target samples (samples.TARGETS)
 
 // Boolean flag from the environment (1/true/yes or 0/false/no), or the given default if it is not set
 bool env_flag(const char* name, const bool default_value) {
@@ -20,7 +21,7 @@ bool env_flag(const char* name, const bool default_value) {
 bool         hist_pdfs_   = env_flag("CONVANA_HIST_PDFS", true ); // Use functions or histograms in the model
 bool         include_sys_ = false; // Evaluate systematics
 bool         use_evtana_  = true ; // Use Mu2eEvtAna inputs (EventNtuple)
-bool         use_2bb_     = env_flag("CONVANA_USE_2BB", false); // Use the Mu2eEvtAna inputs re-weighted to 2BB (mode 2), with the 2BB exposure (only in EvtAna mode)
+bool         use_2bb_     = false; // Use the Mu2eEvtAna inputs re-weighted to 2BB (mode 2), with the 2BB exposure (set by samples.py, run_macro.py --2bb)
 bool         run1a_range_ = false; // Use Run 1A paper range (only in EvtAna mode)
 bool         include_t0_  = true ; // Add t0 histograms to the output
 bool         do_2d_fit_   = false; // Perform a (p, t) fit instead of a 1D p fit

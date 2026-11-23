@@ -157,7 +157,7 @@ build_set() {
         ./perform_fits.sh "${PROCESS}" "${set}" "${TAG}" "${EVTANA}" "${NOSYS}"
     fi
     if [[ "${SKIPMODEL}" == "" ]]; then
-        root.exe -q -b "build_model.C(\"${PROCESS}\", ${set}, \"${TAG}\", ${MCSTAT})"
+        ../../run_macro.py "build_model.C(\"${PROCESS}\", ${set}, \"${TAG}\", ${MCSTAT})"
     fi
 }
 

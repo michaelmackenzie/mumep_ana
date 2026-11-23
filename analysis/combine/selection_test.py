@@ -50,6 +50,10 @@ def read_samples():
     return values["TARGETS"], values["TARGET_HIST_PATH"]
 
 
+# the ROOT macros run with the samples.py dataset list
+RUN_MACRO = f"{shlex.quote(sys.executable)} {shlex.quote(os.path.join(HERE, '..', 'run_macro.py'))}"
+
+
 def run(command, log, cwd=HERE):
     """Run a command (a string, through the shell), logging it and its output; exit on failure."""
     print(command)
@@ -143,7 +147,7 @@ def main():
         tail = f', "{set_cuts}"' if set_cuts else ""
         macro = f'make_selection_hists.C("{" ".join(tokens)}", "{cut}", "{outdir}"'
         macro += f', "{args.datasets}", true{tail})' if (args.datasets or tail) else ")"
-        text = run(f"root.exe -q -b {shlex.quote(macro)}", os.path.join(logdir, "make_selection_hists.log"))
+        text = run(f"{RUN_MACRO} {shlex.quote(macro)}", os.path.join(logdir, "make_selection_hists.log"))
         print("\n".join(line for line in text.splitlines() if "selected" in line))
         if args.target:
             # the target's signal and DIO come from the target histogram directory, written to the same directory
@@ -151,7 +155,7 @@ def main():
             names = " ".join([TARGETS[args.target][0][0], TARGETS[args.target][1][0]])
             # copy_all: the other sets of these files (e.g. set 10 for the DIO tail) are needed by the model
             macro = f'make_selection_hists.C("{" ".join(tokens)}", "{cut}", "{outdir}", "{names}", true, "{set_cuts}")'
-            text = run(f"CONVANA_HIST_PATH={shlex.quote(tdir)} root.exe -q -b {shlex.quote(macro)}",
+            text = run(f"CONVANA_HIST_PATH={shlex.quote(tdir)} {RUN_MACRO} {shlex.quote(macro)}",
                        os.path.join(logdir, "make_selection_hists_target.log"))
             print("\n".join(line for line in text.splitlines() if "selected" in line))
 

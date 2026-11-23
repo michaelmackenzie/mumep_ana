@@ -108,7 +108,7 @@ int make_plots(const bool mumem = false, vector<int> sets = {40,41}, TString dat
   const double base_br(signal_br_);
   plotter_->update_signal_br(signal_br_);
   plotter_->use_offsets_ = false; //don't use control regions for initial counts
-  plotter_->ratio_plot_ = !mumem || mds; // only do ratio plot with data
+  plotter_->ratio_plot_ = /*!mumem || */mds; // only do ratio plot with data
   print_proc_info(0);
   print_proc_info(6);
   if(use_evtana_) print_dataset_info(60);

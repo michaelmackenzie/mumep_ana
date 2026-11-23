@@ -141,7 +141,7 @@ echo ">>> Selection test ${TAG}: \"${CUT}\" on sets ${SETS}"
 # 1) Dataset histograms with the test selection
 if [[ "${SKIPHISTS}" == "" ]]; then
     echo ">>> Making the test histograms in ${OUTDIR}"
-    root.exe -q -b "make_selection_hists.C(\"${SETS}\", \"${CUT//\"/\\\"}\", \"${OUTDIR}\")" > "${LOGDIR}/make_selection_hists.log" 2>&1 \
+    ../../run_macro.py "../make_selection_hists.C(\"${SETS}\", \"${CUT//\"/\\\"}\", \"${OUTDIR}\")" > "${LOGDIR}/make_selection_hists.log" 2>&1 \
         || { echo "Histogram creation failed, see ${LOGDIR}/make_selection_hists.log"; exit 1; }
     grep "selected" "${LOGDIR}/make_selection_hists.log" || true
 fi

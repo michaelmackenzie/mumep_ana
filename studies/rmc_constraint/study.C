@@ -31,7 +31,7 @@ double get_norm(DatasetInfo_t& info, TFile* f) {
   return norm;
 }
 
-int study(TString dir = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms/",
+int study(TString dir = "", // default: the analysis histogram directory (hist_path_)
           const int base_set = 75) {
 
   //------------------------------------------
@@ -41,7 +41,9 @@ int study(TString dir = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms/",
   // Configure the dataset info setup
   use_evtana_ = true;
   set_evtana_defaults();
-  init_dataset_info();
+  if(!require_dataset_info()) return 1; // filled by samples.py (mumep_ana/analysis/run_macro.py)
+  if(!init_physics("run1a")) return 1;
+  if(dir == "") dir = hist_path_;
 
   // Get the dataset infos
   auto rmc_ext_info = get_dataset_info("rmc_ext_0n");
@@ -75,7 +77,7 @@ int study(TString dir = "/exp/mu2e/data/projects/run1a/mumep_ana/histograms/",
   // Normalize inputs
   //------------------------------------------
 
-  const double npot = npot_run1a_;
+  const double npot = npot_;
   const double norm_ext = npot*get_norm(rmc_ext_info, f_ext);
   const double norm_int = npot*get_norm(rmc_int_info, f_int);
 

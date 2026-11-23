@@ -35,25 +35,6 @@ bool is_flat_bkg(const TString name) { return name.BeginsWith("cosmic") || name.
 // Optimize on the events with even event numbers and evaluate on the odd ones (each half weighted by 2)
 bool split_ = true;
 
-// Stopping-target designs, as in combine/samples.py TARGETS: unmixed OnSpill CeEndpoint signal and DIO samples
-// (dataset, N(generated), events in the full dataset) and the mu- stops per resampled MuBeamCat event
-struct TargetInfo_t {
-  TString name;
-  TString signal; double signal_gen; Long64_t signal_events;
-  TString dio;    double dio_gen;    Long64_t dio_events;
-  double stops_per_draw;
-};
-const std::vector<TargetInfo_t> targets_ = {
-  {"nominal"       , "cele0b0s5r0101", 1e7, 4247008, "dio00b0s5r0101", 8e6, 2995328, 1435092 * 1000. / 4e9},
-  {"st37plus6up6dn", "cele0b0s5r0110", 1e7, 4002040, "dio00b0s5r0110", 8e6, 2764431, 5856806 / 1e7},
-  {"st49hole1to5"  , "cele0b0s5r0120", 1e7, 3967395, "dio00b0s5r0120", 8e6, 2717026, 6527950 / 1e7},
-  {"st49hole9to41" , "cele0b0s5r0130", 1e7, 3961096, "dio00b0s5r0130", 8e6, 2700249, 5826669 / 1e7},
-};
-const double mubeam_per_pot_ = 213816 / 1e8; // MuBeamCat events per POT
-TString target_hist_path_ = (gSystem->Getenv("CONVANA_TARGET_HIST_PATH")) ? TString(gSystem->Getenv("CONVANA_TARGET_HIST_PATH")) + "/"
-                                                                          : TString("/exp/mu2e/data/projects/run1a/mumep_ana/histograms_alt_target_2026-10-31/");
-
-
 double getCombine(double S, double B) {
   // Print a temporary card
   std::ofstream outfile;
@@ -725,40 +706,30 @@ std::pair<TGraph*,TGraph*> perform_grid_scan(const Events_t& events,
 }
 
 // optimize_crv: drop the ConvAna CRV veto (add the vetoed set, base_set + 1000) and optimize the CRV veto window
-// target: stopping-target design of targets_ (mu- --> e- only). The signal and DIO are the target's unmixed OnSpill
-//         samples, normalized to its stops per POT (also applied to the RMC), using set 81 (see optimize_target_selection_fast)
+// target: stopping-target design of combine/samples.py TARGETS (mu- --> e- only), run with run_macro.py --target.
+//         The signal and DIO are the target's unmixed OnSpill samples, normalized to its stops per POT (also
+//         applied to the RMC), using set 81 (see optimize_target_selection_fast)
 // n_random: randomized greedy starts (each step one of the top 3 candidates), refined like the other starts
-int optimize_selection_fast(const bool mumem = false, const int base_set = 40, const bool optimize_crv = false,
+int optimize_selection_fast(const bool mumem = false, const int base_set = 45, const bool optimize_crv = false,
                             const TString target = "", const int ngrid_tests = 1e4, const int n_random = 5) {
 
   // Retrieve the relevant backgrounds
-  init_physics("run1a"); // default to Run 1A
+  if(!init_physics("run1a")) return 1; // Run 1A (with a target: the target's stops per POT)
   use_evtana_ = true;
   set_evtana_defaults();
-  init_dataset_info();
   std::vector<TString> names = {(mumem) ? "mumem" : "mumep", "cosmic", "rmc_ext_0n", "rmc_int_0n", "rpc_ext", "rpc_int"};
 
-  // Stopping-target study: replace the signal and add the DIO with the target's samples
+  // Stopping-target study: samples.py (run_macro.py --target) replaces the signal and DIO with the target's samples,
+  // normalized to its stops per POT (also applied to the RMC); the DIO is added to the samples
   const bool do_target = target != "";
+  if(do_target && !mumem) {
+    cout << "The stopping-target study is only defined for mu- --> e-\n";
+    return 1;
+  }
+  if(!check_dataset_exposure(target)) return 1;
   if(do_target) {
-    if(!mumem) {
-      cout << "The stopping-target study is only defined for mu- --> e-\n";
-      return 1;
-    }
-    const TargetInfo_t* tgt = nullptr;
-    for(const auto& t : targets_) if(t.name == target) tgt = &t;
-    if(!tgt) {
-      cout << "Target \"" << target << "\" not found!\n";
-      return 1;
-    }
-    const double nmu_per_pot = mubeam_per_pot_ * tgt->stops_per_draw;
-    const double rate_sig = muon_capture_fraction_*nmu_per_pot;
-    const double rate_dio_95 = (1.-muon_capture_fraction_)*nmu_per_pot*dio_frac_95_;
-    datasets_["mumem"] = DatasetInfo_t(tgt->signal_gen, tgt->signal_events, 0., 1., rate_sig   , tgt->signal);
-    datasets_["dio"]   = DatasetInfo_t(tgt->dio_gen   , tgt->dio_events   , 0., 1., rate_dio_95, tgt->dio   );
-    for(TString rmc : {"rmc_ext_0n", "rmc_int_0n"}) datasets_[rmc].theory_ *= nmu_per_pot / nmuons_per_pot_; // RMC follows the stops
     names.insert(names.begin() + 1, "dio");
-    printf("Target %s: stops/POT = %.4g (Run 1A default %.4g)\n", target.Data(), nmu_per_pot, nmuons_per_pot_);
+    printf("Target %s: stops/POT = %.4g\n", target.Data(), nmuons_per_pot_);
   }
   printf("Figure of merit: %s\n", (fom_ == kExpectedUL) ? "1 / expected 90% CL CLs upper limit"
                                  : (fom_ == kAsimovZ)  ? "Asimov significance" : "S / sqrt(B)");

@@ -6,7 +6,7 @@ does the statistics.
 
 ## Organization
 
-- `samples.py`: the Mu2eEvtAna (EventNtuple) datasets, their rates (as in `../datasets.C` and `../physics.C`), the
+- `samples.py`: the Mu2eEvtAna (EventNtuple) datasets (also for the ROOT macros, via `../run_macro.py`), their rates, the
   exposures (Run 1A at 1BB or 2BB, Run 2, MDS3c/d), and the rate uncertainties.
 - `build_model.py`: builds and writes one model, the shape model and the cut-and-count model.
 - `full_loop.py`: builds the model and optionally tests it with Combine.
@@ -408,7 +408,7 @@ RMCPower width).
 selection sensitivity tests without reprocessing the EventNtuples (EventNtuple inputs only):
 
 ```bash
-root.exe -q -b 'make_selection_hists.C("40", "trk_qual > 0.9 && trk_pid > 0.95", "selection_hists/qual_pid")'
+../run_macro.py 'make_selection_hists.C("40", "trk_qual > 0.9 && trk_pid > 0.95", "selection_hists/qual_pid")'
 ./full_loop.py -p mumep -s "40" -t qual_pid --hist-path selection_hists/qual_pid
 ```
 
@@ -423,7 +423,7 @@ root.exe -q -b 'make_selection_hists.C("40", "trk_qual > 0.9 && trk_pid > 0.95",
   `--hist-path` (or `CONVANA_HIST_PATH`) points the model building at them in place of the default histogram directory.
 - Several variations are made in one pass over the trees with a cut file, one `<tag> : <cut>` per
   line, each written to `<out_dir>/<tag>/`:
-  `root.exe -q -b 'make_selection_hists.C("40", "cuts.txt", "selection_hists")'`
+  `../run_macro.py 'make_selection_hists.C("40", "cuts.txt", "selection_hists")'`
 - With no cut, the outputs reproduce the original `obs` and `t0` histograms exactly.
 
 ## Macro-based model (legacy/)

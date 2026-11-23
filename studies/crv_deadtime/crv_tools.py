@@ -56,7 +56,7 @@ CONVANA_UPSTREAM_VETO = {UPSTREAM: (40., 110.)}
 # Pairs of variables to compare in 2D
 PAIRS = [("trk_crv_dt", "trk_crv_raw_dt"), ("trk_crv_cal_dt", "trk_crv_st_dt")]
 
-# Samples (analysis/datasets.C names): mu- --> e+ signal and the backgrounds in the e+ momentum window
+# Samples (analysis/combine/samples.py names): mu- --> e+ signal and the backgrounds in the e+ momentum window
 SIGNAL      = "mumep"
 BACKGROUNDS = ["cosmic", "rmc_ext_0n", "rmc_ext_1n", "rmc_int_0n", "rmc_int_1n", "rpc_ext", "rpc_int"]
 
@@ -78,19 +78,23 @@ def analysis_macros():
     ROOT.gROOT.SetBatch(True)
     if ROOT.gROOT.LoadMacro(str(ANALYSIS_DIR / "optimize_selection.C")) != 0:
         raise RuntimeError("Failed to load analysis/optimize_selection.C")
-    ROOT.init_physics("run1a")
+    # the dataset list, exposure, and histogram directory of analysis/combine/samples.py, at the Run 1A exposure
+    import sys
+    sys.path.insert(0, str(ANALYSIS_DIR / "combine"))
+    import samples
+    samples.export_to_root(samples.Exposure("run1a"))
+    if not ROOT.init_physics("run1a"): raise RuntimeError("init_physics failed")
     ROOT.use_evtana_ = True
     ROOT.set_evtana_defaults()
-    ROOT.init_dataset_info()
     _root = ROOT
     return ROOT
 
 
 def hist_file(name):
-    """ConvAna histogram file of a dataset (the path respects CONVANA_HIST_PATH, as in analysis/defaults.C)."""
+    """ConvAna histogram file of a dataset (the path respects CONVANA_HIST_PATH, as in analysis/combine/samples.py)."""
     ROOT = analysis_macros()
     info = ROOT.get_dataset_info(name)
-    if info.name_ == "": raise ValueError(f"Dataset {name} is not defined in analysis/datasets.C")
+    if info.name_ == "": raise ValueError(f"Dataset {name} is not defined in analysis/combine/samples.py")
     path = f"{ROOT.hist_path_}ConvAna.{ROOT.hist_func_}.{info.name_}.m{ROOT.hist_mode_}.{ROOT.file_type_}"
     return path, info
 

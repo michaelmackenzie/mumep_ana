@@ -76,7 +76,7 @@ int fit_component_model(TString process,
                         TString fit_input = "primary",
                         TString hist_file = "") {
   if(use_evtana_) set_evtana_defaults();
-  init_physics(tag);
+  if(!init_physics(tag)) return 1;
 
   component.ToLower();
   pdf_type = resolve_pdf_type(component, pdf_type);

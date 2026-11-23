@@ -1193,9 +1193,8 @@ public:
     TGaxis::SetExponentOffset(-0.06, 0.008, "Y");
 
     // Initialize the input data
-    init_physics(dataset + "_" + tag);
-    datasets_.clear();
-    init_dataset_info();
+    if(!init_physics(dataset + "_" + tag)) return 1; // the exposure set by combine/samples.py (run_macro.py)
+    if(!check_dataset_exposure()) return 1; // filled by combine/samples.py (run_macro.py)
 
     TString title; int color;
     auto get_dataset = [&](const TString& name, DatasetInfo_t& info) {

@@ -25,9 +25,9 @@
 //   ./build_model.py --hist-path <out_dir>[/<tag>] ... (or ./full_loop.py)
 //
 // Examples:
-//   root.exe -q -b 'make_selection_hists.C("40", "trk_qual > 0.9", "selection_hists/qual_0p9")'
+//   ../run_macro.py 'make_selection_hists.C("40", "trk_qual > 0.9", "selection_hists/qual_0p9")'
 //   Split set 81 (no CRV veto) into a CRV-vetoed set 81 and a CRV-tagged set 1081:
-//   root.exe -q -b 'make_selection_hists.C("81 81>1081", "trk_cluster > 0.", "selection_hists/crv", "cosmic", true,
+//   ../run_macro.py 'make_selection_hists.C("81 81>1081", "trk_cluster > 0.", "selection_hists/crv", "cosmic", true,
 //     "81: !(trk_crv_raw_dt > 0. && trk_crv_raw_dt < 150.) ; 1081: (trk_crv_raw_dt > 0. && trk_crv_raw_dt < 150.)")'
 
 #include "../defaults.C"
@@ -123,7 +123,7 @@ int make_selection_hists(TString sets = "40", TString cuts = "", TString out_dir
                          TString datasets = "", const bool copy_all = true, TString set_cuts = "") {
   use_evtana_ = true;
   set_evtana_defaults();
-  init_dataset_info();
+  if(!require_dataset_info()) return 1; // filled by samples.py (../run_macro.py)
 
   //Parse the inputs
   std::vector<SelectionSet_t> set_list;

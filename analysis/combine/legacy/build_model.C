@@ -380,7 +380,7 @@ void print_model(TString figdir, const int selection, RooRealVar& obs, RooAbsDat
 int build_model(TString process = "mumem", int selection = 20, TString tag = "", const bool include_mc_stat = false) {
   include_mc_stat_ = include_mc_stat;
   if(use_evtana_) set_evtana_defaults();
-  init_physics(tag);
+  if(!init_physics(tag)) return 1;
   process.ToLower();
   do_knockouts_ = true;
 

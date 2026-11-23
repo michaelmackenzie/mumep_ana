@@ -128,7 +128,7 @@ multi-track vetoes. With `--set 43`, the study applies the multi-track veto (`|t
 emulates the ConvAna CRV and upstream vetoes, and checks that the emulation reproduces sets 40 and 1040. It then also
 scans `trk_upstream_dt`, and searches for a raw CRV window OR an upstream window that vetoes every tagged cosmic ray.
 
-The samples and their normalization come from `analysis/datasets.C` and `evaluate_norm` in
+The samples and their normalization come from `analysis/combine/samples.py` and `evaluate_norm` in
 `analysis/optimize_selection.C`. The signal is `mumep`. The backgrounds are cosmic rays, RMC external and internal
 (0n and 1n), and RPC external and internal.
 
@@ -169,7 +169,7 @@ each veto option.
 `analysis/optimize_selection.C` can include the CRV windows in the greedy cut optimization:
 ```bash
 cd <scratch dir>  # writes cut_strings_mumep_crv.txt and roc_*mumep_crv.png into the current directory
-root -q -b '<path>/mumep_ana/analysis/optimize_selection.C(false, 40, true)'
+<path>/mumep_ana/analysis/run_macro.py '<path>/mumep_ana/analysis/optimize_selection.C(false, 40, true)'
 ```
 With `optimize_crv = true`, it adds set 1040 to remove the ConvAna CRV veto. It then adds `trk_crv_dt` and
 `trk_crv_raw_dt` as veto (`kVeto`) variables, whose windows grow outward from the cosmic-ray peaks. The greedy

@@ -108,8 +108,12 @@ Preliminary plots can be made using the [Plotter](analysis/plotter) tool.
 An example is:
 ```bash
 cd analysis
-root.exe -q -b 'make_plots.C(true, {75})'
+./run_macro.py 'make_plots.C(true, {75})'
 ```
+The datasets, their rates, the exposures, and the histogram directories are defined in
+[analysis/combine/samples.py](analysis/combine/samples.py), shared by the plots and the Combine models. `run_macro.py`
+sets them in the macros (`--exposure`, `--2bb`, `--target`, `--nominal-tracker`; see `./run_macro.py -h`); the macros
+refuse to run without them, or with an exposure that doesn't match their tag.
 
 ## Making Combine models
 

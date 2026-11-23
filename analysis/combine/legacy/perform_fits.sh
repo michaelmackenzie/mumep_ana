@@ -99,17 +99,17 @@ run_fit() {
     fi
 
     if [[ "${macro}" == "signal_fit" ]]; then
-        root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", -1, \"${pdf}\", \"${tail}\", ${shape_vec})"
+        ../../run_macro.py "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", -1, \"${pdf}\", \"${tail}\", ${shape_vec})"
     elif [[ "${macro}" == "dio_fit" ]]; then
-        root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", -1, \"${pdf}\", \"${tail}\", ${shape_vec})"
+        ../../run_macro.py "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", -1, \"${pdf}\", \"${tail}\", ${shape_vec})"
     elif [[ "${macro}" == "cosmic_fit" ]]; then
-        root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", -1, \"${pdf}\", ${ctrl_vec})"
+        ../../run_macro.py "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", -1, \"${pdf}\", ${ctrl_vec})"
     elif [[ "${macro}" == "rmc_ext_fit" ]] || [[ "${macro}" == "rmc_int_fit" ]]; then
-        root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", \"${pdf}\", \"${tail}\", ${shape_vec}, ${ctrl_vec}, \"${knockout}\")"
+        ../../run_macro.py "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", \"${pdf}\", \"${tail}\", ${shape_vec}, ${ctrl_vec}, \"${knockout}\")"
     elif [[ "${macro}" == "rpc_ext_fit" ]] || [[ "${macro}" == "rpc_int_fit" ]] || [[ "${macro}" == "pbar_fit" ]]; then
-        root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", \"${pdf}\", ${shape_vec}, ${ctrl_vec})"
+        ../../run_macro.py "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", \"${pdf}\", ${shape_vec}, ${ctrl_vec})"
     else
-        root.exe -q -b "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\")"
+        ../../run_macro.py "${macro}.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\")"
     fi
 }
 

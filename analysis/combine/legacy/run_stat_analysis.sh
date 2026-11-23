@@ -51,7 +51,7 @@ echo "   ntoys     : ${NTOYS}"
 echo "   mu_inject : ${MU_INJECT}"
 echo "============================================================"
 
-root.exe -q -b "stat_analysis.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", ${ANALYSES}, ${NTOYS}, ${MU_INJECT})"
+../../run_macro.py "stat_analysis.C(\"${PROCESS}\", ${SELECTION}, \"${TAG}\", ${ANALYSES}, ${NTOYS}, ${MU_INJECT})"
 STATUS=$?
 
 echo ""
