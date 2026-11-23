@@ -207,18 +207,10 @@ def analytic_pdf(process, component, region, obs, name):
                 # a broad Gaussian peaking below the range, as exp(quadratic): the fit lands far in the tail, where
                 # Gaussian bin integrals (erf differences) lose all precision
                 return ("exp_poly", 2)
-            # a broad Gaussian plus a linear polynomial (0n)
-            mean = ROOT.RooRealVar(f"{name}_mean", "Gaussian mean", 75., 30., 90.)
-            sigma = ROOT.RooRealVar(f"{name}_sigma", "Gaussian sigma", 12., 5., 20.)
-            KEEP.extend([mean, sigma])
-            p0 = ROOT.RooRealVar(f"{name}_p0", "constant", -0.001, -1., 1.)
-            p1 = ROOT.RooRealVar(f"{name}_p1", "slope", 0., -0.1, 0.1)
-            o = obs.GetName()
-            pdf = ROOT.RooGenericPdf(name, "RMC shape", f"max(0., TMath::Gaus({o}, {mean.GetName()}, {sigma.GetName()})"
-                                     f" + {p0.GetName()} + {p1.GetName()}*{o}/90)",
-                                     ROOT.RooArgList(obs, mean, sigma, p0, p1))
-            KEEP.extend([p0, p1, pdf])
-            return pdf
+            # 0n: the spectrum falling to its endpoint, (e0 - p)^a (1 + c1 t). It fits as well as the earlier broad
+            # Gaussian plus linear term (4 parameters, whose width sat at its lower bound and whose fits landed in
+            # different minima for nearly identical selections), with stable parameters away from their limits
+            return ("endpoint", 1)
         x0 = ROOT.RooRealVar(f"{name}_x0", "Low threshold edge", 94. if region.charge_inverted else 96.)
         x0.setConstant(True)
         alpha = ROOT.RooRealVar(f"{name}_alpha", "Low-edge turn-on power", 1.915, 0.1, 4.0)

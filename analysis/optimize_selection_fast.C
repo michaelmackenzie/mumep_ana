@@ -14,11 +14,14 @@
 #include "defaults.C"
 #include "physics.C"
 #include "datasets.C"
+#include "TTreeFormula.h"
 #include <array>
+#include <fstream>
 #include <numeric>
 
 int debug_level_ = 0;
 TString dir_ = "optimize/";
+const TString macro_dir_ = gSystem->DirName(__FILE__); // for combine/test_candidates.py
 
 // Figure of merit
 enum {kSOverSqrtB, kAsimovZ, kExpectedUL};
@@ -711,8 +714,12 @@ std::pair<TGraph*,TGraph*> perform_grid_scan(const Events_t& events,
 //         The signal and DIO are the target's unmixed OnSpill samples, normalized to its stops per POT (also
 //         applied to the RMC), using set 81 (see optimize_target_selection_fast)
 // n_random: randomized greedy starts (each step one of the top 3 candidates), refined like the other starts
+// n_combine: at the end, test the top n_combine candidates (candidates.json, ranked by the test-half figure of merit)
+//            with Combine models built from the selection trees: combine/test_candidates.py, which needs the Combine
+//            environment and can also be run on its own afterwards (see its help)
 int optimize_selection_fast(const bool mumem = false, const int base_set = 45, const bool optimize_crv = false,
-                            const TString target = "", const int ngrid_tests = 1e4, const int n_random = 5) {
+                            const TString target = "", const int ngrid_tests = 1e4, const int n_random = 5,
+                            const int n_combine = 5) {
 
   // Retrieve the relevant backgrounds
   if(!init_physics("run1a")) return 1; // Run 1A (with a target: the target's stops per POT)
@@ -735,12 +742,34 @@ int optimize_selection_fast(const bool mumem = false, const int base_set = 45, c
   printf("Figure of merit: %s\n", (fom_ == kExpectedUL) ? "1 / expected 90% CL CLs upper limit"
                                  : (fom_ == kAsimovZ)  ? "Asimov significance" : "S / sqrt(B)");
 
+  // CRV veto: applied by default. A base set without the ConvAna CRV veto (e.g. 45, 81: its cosmic rays include
+  // CRV-tagged tracks) gets it from the tree, from the closest CRV cluster; the Combine model test does the same
+  // (selection_test.py --crv-from-tree). optimize_crv optimizes the veto window instead.
+  const TString crv_tag = "(trk_crv_raw_dt > 0. && trk_crv_raw_dt < 150.)"; // closest CRV cluster 0-150 ns before
+  bool crv_from_tree = false;
+  if(!optimize_crv) {
+    const auto& info = get_dataset_info("cosmic");
+    TFile* f = TFile::Open(Form("%sConvAna.%s.%s.m%i.%s", hist_path_, hist_func_, info.name_.Data(), hist_mode_,
+                                file_type_.Data()), "READ");
+    TTree* t = (f) ? (TTree*) f->Get(Form("%sHist/trs_%i/tree", dir_path_.Data(), base_set)) : nullptr;
+    if(!t) {
+      cout << "Cosmic-ray selection tree of set " << base_set << " not found: can't check its CRV veto\n";
+      return 1;
+    }
+    const Long64_t n_tagged = t->GetEntries(crv_tag);
+    crv_from_tree = n_tagged > 0;
+    printf("CRV veto: set %i %s\n", base_set, (crv_from_tree)
+           ? Form("has no ConvAna CRV veto (%lld CRV-tagged cosmic-ray tracks): applied from the tree", n_tagged)
+           : "is CRV vetoed by ConvAna");
+    f->Close();
+  }
+
   // Selection applied to all samples that isn't optimized, besides the momentum window
   TString preselection = Form("(%s * trk_charge) > 0 && weight > 0.", (mumem) ? "-1" : "1");
   if(do_target) { // set 81 has no material, cluster, or CRV requirements; the ST intersection cuts are left out
     preselection += " && trk_cluster > 0. && trk_opa == 0 && trk_ntsda == 0";
-    if(!optimize_crv) preselection += " && !(trk_crv_raw_dt > 0. && trk_crv_raw_dt < 150.)"; // closest CRV cluster
   }
+  if(crv_from_tree) preselection += " && !" + crv_tag;
   if(mumem) printf("Momentum window: %.1f - %.1f MeV/c, flat backgrounds from %.1f - %.1f MeV/c\n",
                    p_sr_min_, p_sr_max_, p_flat_min_, p_flat_max_);
   cout << "Preselection: " << preselection << endl;
@@ -814,18 +843,21 @@ int optimize_selection_fast(const bool mumem = false, const int base_set = 45, c
     vars.push_back(Var_t("trk_d0"        , -150.,  150.));
     vars.push_back(Var_t("trk_t0err"     ,   0.,    2., kRight));
     vars.push_back(discrete_var("trk_nactive", 10, 60, kLeft));
-    // vars.push_back(discrete_var("trk_opa"    ,  0,  1, kRight)); // OPA intersection flag
-    // vars.push_back(discrete_var("trk_ntsda"  ,  0,  5, kRight)); // N(TSDA intersections)
+  } else { // the intersection vetoes (fixed in the target preselection, which leaves out the ST intersections)
+    vars.push_back(discrete_var("trk_opa"    ,  0,  1, kRight)); // OPA intersection flag: veto
+    vars.push_back(discrete_var("trk_ntsda"  ,  0,  5, kRight)); // N(TSDA intersections): maximum
+    vars.push_back(discrete_var("(trk_nst_down + trk_nst_up)", 0, 6, kLeft)); // N(ST intersections): minimum
   }
   if(optimize_crv) { // track - CRV cluster time vetoes, starting in the cosmic peaks (no cluster: -10000, never vetoed)
     vars.push_back(Var_t("trk_crv_dt"    , -150.,  150., kVeto, -10.)); // via the calo/ST, closest cluster
     vars.push_back(Var_t("trk_crv_raw_dt", -100.,  300., kVeto,  35.)); // raw cluster time, closest cluster
   }
 
-  // Validate the variables
+  // Validate the variables (branches or expressions of them)
   for(auto& var : vars) {
     for(auto& sample : samples) {
-      if(!sample.tree->GetBranch(var.name)) {
+      TTreeFormula formula("var_check", var.name, sample.tree);
+      if(formula.GetNdim() == 0) {
         cout << "Var " << var.name << " is undefined for sample " << sample.name << endl;
         return 1;
       }
@@ -967,6 +999,73 @@ int optimize_selection_fast(const bool mumem = false, const int base_set = 45, c
            lim_test, build_cut_string(refined[best_start].vars).Data());
   }
 
+  // Candidates for the Combine model test: the refined selection of each start, ranked by the test-half figure of
+  // merit, with what selection_test.py needs to re-fill the model inputs from the selection trees
+  const TString f_candidates = out_dir + "/candidates.json";
+  {
+    struct Candidate_t {TString name, cut; double eff, sig, lim, eff_test, sig_test, lim_test;};
+    std::vector<Candidate_t> candidates;
+    for(int i = 0; i < (int) starts.size(); ++i) {
+      const auto& result = refined[i];
+      const TString cut = build_cut_string(result.vars);
+      if(std::any_of(candidates.begin(), candidates.end(), [&](const Candidate_t& c) {return c.cut == cut;})) continue;
+      const auto [eff_test, sig_test, lim_test] = evaluate_test(result.vars);
+      candidates.push_back({starts[i].first, cut, result.n_sig / n_sig_0, get_sig(result.n_sig, result.n_bkg) / sig_0,
+                            get_inv_limit(result.n_sig, result.n_bkg) / lim_0, eff_test, sig_test, lim_test});
+    }
+    const bool by_limit = fom_ == kExpectedUL;
+    std::stable_sort(candidates.begin(), candidates.end(), [&](const Candidate_t& a, const Candidate_t& b) {
+      return (by_limit) ? a.lim_test > b.lim_test : a.sig_test > b.sig_test;});
+    // The model selection: the set's selection (re-filled from its selection tree), the preselection cuts that aren't
+    // the momentum window, charge, or event weight (the model's fit range and process set those), and the candidate.
+    // A set without the ConvAna CRV veto (crv_from_tree): selection_test.py --crv-from-tree applies the
+    // closest-cluster veto as above.
+    const TString model_preselection = (do_target) ? "trk_cluster > 0. && trk_opa == 0 && trk_ntsda == 0" : "";
+    auto json = [](TString v) {v.ReplaceAll("\\", "\\\\"); v.ReplaceAll("\"", "\\\""); return "\"" + v + "\"";};
+    std::ofstream out(f_candidates.Data());
+    out << "{\n";
+    out << "  \"tag\": " << json(tag) << ",\n";
+    out << "  \"process\": " << json((mumem) ? "mumem" : "mumep") << ",\n";
+    out << "  \"sets\": " << json(Form("%i", base_set)) << ",\n";
+    out << "  \"target\": " << json(target) << ",\n";
+    out << "  \"crv_from_tree\": " << ((crv_from_tree) ? "true" : "false") << ",\n";
+    // the CRV-tagged set (base_set + 1000) merged into the selection has no model equivalent
+    out << "  \"supported\": " << ((optimize_crv) ? "false" : "true") << ",\n";
+    out << "  \"preselection\": " << json(model_preselection) << ",\n";
+    out << "  \"figure_of_merit\": " << json((by_limit) ? "inv_limit" : "sig") << ",\n";
+    out << "  \"candidates\": [\n";
+    for(int i = 0; i < (int) candidates.size(); ++i) {
+      const auto& c = candidates[i];
+      out << Form("    {\"name\": %s, \"eff\": %.6f, \"sig\": %.4f, \"inv_limit\": %.4f, \"eff_test\": %.6f, "
+                  "\"sig_test\": %.4f, \"inv_limit_test\": %.4f, \"cut\": %s}%s\n", json(c.name).Data(), c.eff, c.sig,
+                  c.lim, c.eff_test, c.sig_test, c.lim_test, json(c.cut).Data(), (i + 1 < (int) candidates.size()) ? "," : "");
+    }
+    out << "  ]\n}\n";
+    out.close();
+    printf("Wrote %zu candidates (ranked by the test-half %s) to %s\n", candidates.size(),
+           (by_limit) ? "1 / expected limit" : "significance", f_candidates.Data());
+
+    // The same ranking as text, for checking: the metrics and the full model selection of each candidate
+    const TString f_top = out_dir + "/top_candidates.txt";
+    std::ofstream top(f_top.Data());
+    top << "# Selection candidates of " << tag << " (set " << base_set << (do_target ? ", target " + target : TString(""))
+        << "), ranked by the test-half " << ((by_limit) ? "1 / expected limit" : "significance") << "\n"
+        << "# eff, sig, and 1/limit are relative to the preselection; the train half was optimized, the test half wasn't\n"
+        << "# selection: the model selection on top of the set's selection"
+        << ((crv_from_tree) ? " (plus the closest-cluster CRV veto, selection_test.py --crv-from-tree)" : "") << "\n\n";
+    top << Form("%-4s %-10s %8s %8s %8s %10s %10s %10s\n", "rank", "start", "eff", "sig", "1/limit",
+                "eff(test)", "sig(test)", "1/l(test)");
+    for(int i = 0; i < (int) candidates.size(); ++i) {
+      const auto& c = candidates[i];
+      const TString selection = (model_preselection == "") ? c.cut : model_preselection + " && " + c.cut;
+      top << Form("%-4i %-10s %8.4f %8.4f %8.4f %10.4f %10.4f %10.4f\n", i + 1, c.name.Data(), c.eff, c.sig, c.lim,
+                  c.eff_test, c.sig_test, c.lim_test)
+          << "     selection: " << selection.Data() << "\n\n";
+    }
+    top.close();
+    printf("Wrote the ranked candidates and their selections to %s\n", f_top.Data());
+  }
+
   // Do a random grid test
   timer.Start();
   auto [grid_points, grid_sigs] = perform_grid_scan(train, vars_grid, n_bkg_0, n_sig_0, ngrid_tests,
@@ -1035,12 +1134,29 @@ int optimize_selection_fast(const bool mumem = false, const int base_set = 45, c
   leg_p.Draw();
   c.SaveAs(out_dir + "/roc_grid.png");
 
+  // Combine model test of the top candidates
+  if(n_combine > 0) {
+    if(optimize_crv) {
+      printf("The Combine model test isn't available with optimize_crv (the CRV-tagged set has no model equivalent)\n");
+      return 1;
+    }
+    const TString command = Form("python3 %s/combine/test_candidates.py %s -n %i", macro_dir_.Data(), out_dir.Data(),
+                                 n_combine);
+    printf("\nCombine model test of the top %i candidates:\n%s\n", n_combine, command.Data());
+    fflush(stdout);
+    const int status = gSystem->Exec(command);
+    if(status != 0) {
+      printf("The Combine model test failed (status %i). Rerun it in the Combine environment with:\n  %s\n",
+             status, command.Data());
+      return 1;
+    }
+  }
   return 0;
 }
 
 // Stopping-target study: mu- --> e- selection without the ST intersection/boundary cuts, starting from set 81
 // (trigger, upstream and multi-track vetoes, p > 100 MeV/c) with the target's unmixed signal and DIO samples
 int optimize_target_selection_fast(const TString target = "nominal", const bool optimize_crv = false,
-                                   const int ngrid_tests = 1e4, const int n_random = 5) {
-  return optimize_selection_fast(true, 81, optimize_crv, target, ngrid_tests, n_random);
+                                   const int ngrid_tests = 1e4, const int n_random = 5, const int n_combine = 0) {
+  return optimize_selection_fast(true, 81, optimize_crv, target, ngrid_tests, n_random, n_combine);
 }

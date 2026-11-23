@@ -11,6 +11,9 @@ does the statistics.
 - `build_model.py`: builds and writes one model, the shape model and the cut-and-count model.
 - `full_loop.py`: builds the model and optionally tests it with Combine.
 - `selection_test.py`: sensitivity test of a tightened selection (with `make_selection_hists.C`).
+- `test_candidates.py`: Combine expected limits of the top selection candidates of `../optimize_selection_fast.C`
+  (its `n_combine` argument runs it at the end), each through `selection_test.py`, ranked against a baseline
+  with no extra cut in `optimize/<tag>/combine_test.txt`.
 - `alt_target_study.py`: stopping-target design comparison over several selections, including category splits.
 - `sensitivity_vs_fit_range.py`: expected sensitivity vs. the momentum fit range.
 - `envelope_scans.py`: likelihood scans of r for each envelope function and with the index profiled.
