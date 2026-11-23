@@ -12,6 +12,7 @@ TString     rmc_spectrum_ = "s0v0"; // RMC spectrum to use
 bool        combine_rpc_  = true  ; // Combine RPC samples into one label
 bool        combine_rmc_  = false ; // Combine RMC samples into one label
 bool        do_knockouts_ = false ; // Separate distict RMC knockout channels
+bool        reduced_trk_  = true  ; // Use reduced tracker samples
 
 // Background model options
 bool        physical_dio_     = false ; // Use flat electron or physical sample
@@ -106,26 +107,36 @@ void init_dataset_info() {
     datasets_["data_mds2c"] = DatasetInfo_t(1.    , 5597655, 0.,   1., 1., "mds2cb1s5r0001", "dig.mu2e.ensembleMDS2cMix1BBTriggerable.MDC2020ba_best_v1_3.art"     );
     datasets_["data_mds3c"] = DatasetInfo_t(1.    , 4863968, 0.,   1., 1., "mds3cb1s5r0102", "dig.mu2e.ensembleMDS3cMix1BB.MDC2025am_best_v1_1.art"                );
   } else { // EventNtuple inputs
-    // Nominal tracker:
-    datasets_["mumem"]      = DatasetInfo_t(1e7       , 4141125, 0.,   1., rate_sig                     , "cele1b1s5r0101", "nts.mu2e.CeMLeadingLogMix1BB.MDC2025au_best_v1_1.root"  );
-    4122379 / 10000000
-    datasets_["mumep"]      = DatasetInfo_t(1e7       , 3235878, 0.,   1., rate_sig                     , "cpos1b1s5r0101", "nts.mu2e.CePLeadingLogMix1BB.MDC2025au_best_v1_1.root"  );
-    datasets_["cosmic"]     = DatasetInfo_t(t_cry4ab1 , 4155435, 0.,   1.,       1.                     , "cry4ab1s5r0101", "nts.mu2e.CosmicSignalMix1BB.MDC2025au_best_v1_1.root"   );
-    datasets_["dio"]        = DatasetInfo_t(25e6      , 9368976, 0.,   1., rate_dio_95                  , "dio00b1s5r0101", "nts.mu2e.DIOtail95Mix1BB.MDC2025au_best_v1_1.root"      );
-    datasets_["rmc_ext_0n"] = DatasetInfo_t(7000000000, 4967393, 0.,   1., rate_rmc_ps_0n_80            , "rmce0b1s5r0101", "nts.mu2e.RMCPhaseSpace0NExternalMix1BB.MDC2025au_best_v1_1.root");
-    datasets_["rmc_ext_1n"] = DatasetInfo_t(7000000000, 2974188, 0.,   1., rate_rmc_ps_1n_80            , "rmce1b1s5r0101", "nts.mu2e.RMCPhaseSpace1NExternalMix1BB.MDC2025au_best_v1_1.root");
-    datasets_["rmc_int_0n"] = DatasetInfo_t(  50000000, 1229006, 0.,   1., rate_rmc_ps_0n_80*rmc_int_br_, "rmci0b1s5r0101", "nts.mu2e.RMCPhaseSpace0NInternalMix1BB.MDC2025au_best_v1_1.root");
-    datasets_["rmc_int_1n"] = DatasetInfo_t(  50000000,  517029, 0.,   1., rate_rmc_ps_1n_80*rmc_int_br_, "rmci1b1s5r0101", "nts.mu2e.RMCPhaseSpace1NInternalMix1BB.MDC2025au_best_v1_1.root");
-    datasets_["rpc_ext"]    = DatasetInfo_t(5000000000,  458818, 0.,   1., rate_phys_rpc                , "rpce1b1s5r0101", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
-    datasets_["rpc_int"]    = DatasetInfo_t( 125000000, 1899806, 0.,   1., rate_phys_rpc_int            , "rpci1b1s5r0101", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
-    datasets_["pbar"]       = DatasetInfo_t(  30000000, 6461314, 0.,   1., rate_pbar                    , "pbar1b1s5r0101", "nts.mu2e.PbarResamplingMix1BB.MDC2025au_best_v1_1.root");
+    if(!reduced_trk_) { // Nominal tracker:
+      datasets_["mumem"]      = DatasetInfo_t(1e7       , 4141125, 0.,   1., rate_sig                     , "cele1b1s5r0101", "nts.mu2e.CeMLeadingLogMix1BB.MDC2025au_best_v1_1.root"  );
+      datasets_["mumep"]      = DatasetInfo_t(1e7       , 3235878, 0.,   1., rate_sig                     , "cpos1b1s5r0101", "nts.mu2e.CePLeadingLogMix1BB.MDC2025au_best_v1_1.root"  );
+      datasets_["cosmic"]     = DatasetInfo_t(t_cry4ab1 , 4155435, 0.,   1.,       1.                     , "cry4ab1s5r0101", "nts.mu2e.CosmicSignalMix1BB.MDC2025au_best_v1_1.root"   );
+      datasets_["dio"]        = DatasetInfo_t(25e6      , 9368976, 0.,   1., rate_dio_95                  , "dio00b1s5r0101", "nts.mu2e.DIOtail95Mix1BB.MDC2025au_best_v1_1.root"      );
+      datasets_["rmc_ext_0n"] = DatasetInfo_t(7000000000, 4967393, 0.,   1., rate_rmc_ps_0n_80            , "rmce0b1s5r0101", "nts.mu2e.RMCPhaseSpace0NExternalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rmc_ext_1n"] = DatasetInfo_t(7000000000, 2974188, 0.,   1., rate_rmc_ps_1n_80            , "rmce1b1s5r0101", "nts.mu2e.RMCPhaseSpace1NExternalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rmc_int_0n"] = DatasetInfo_t(  50000000, 1229006, 0.,   1., rate_rmc_ps_0n_80*rmc_int_br_, "rmci0b1s5r0101", "nts.mu2e.RMCPhaseSpace0NInternalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rmc_int_1n"] = DatasetInfo_t(  50000000,  517029, 0.,   1., rate_rmc_ps_1n_80*rmc_int_br_, "rmci1b1s5r0101", "nts.mu2e.RMCPhaseSpace1NInternalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rpc_ext"]    = DatasetInfo_t(5000000000,  458818, 0.,   1., rate_phys_rpc                , "rpce1b1s5r0101", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rpc_int"]    = DatasetInfo_t( 125000000, 1899806, 0.,   1., rate_phys_rpc_int            , "rpci1b1s5r0101", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["pbar"]       = DatasetInfo_t(  30000000, 6461314, 0.,   1., rate_pbar                    , "pbar1b1s5r0101", "nts.mu2e.PbarResamplingMix1BB.MDC2025au_best_v1_1.root");
+    } else { // Reduced tracker:
+      datasets_["mumem"]      = DatasetInfo_t(1e7       , 4126584, 0.,   1., rate_sig                     , "cele1b1s5r0102", "nts.mu2e.CeMLeadingLogMix1BB.MDC2025au_best_v1_1.root"  );
+      datasets_["mumep"]      = DatasetInfo_t(1e7       , 3214876, 0.,   1., rate_sig                     , "cpos1b1s5r0102", "nts.mu2e.CePLeadingLogMix1BB.MDC2025au_best_v1_1.root"  );
+      datasets_["cosmic"]     = DatasetInfo_t(t_cry4ab1 , 4141826, 0.,   1.,       1.                     , "cry4ab1s5r0102", "nts.mu2e.CosmicSignalMix1BB.MDC2025au_best_v1_1.root"   );
+      datasets_["dio"]        = DatasetInfo_t(25e6      , 9323791, 0.,   1., rate_dio_95                  , "dio00b1s5r0102", "nts.mu2e.DIOtail95Mix1BB.MDC2025au_best_v1_1.root"      );
+      datasets_["rmc_ext_0n"] = DatasetInfo_t(7000000000, 4962417, 0.,   1., rate_rmc_ps_0n_80            , "rmce0b1s5r0102", "nts.mu2e.RMCPhaseSpace0NExternalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rmc_ext_1n"] = DatasetInfo_t(7000000000, 2972496, 0.,   1., rate_rmc_ps_1n_80            , "rmce1b1s5r0102", "nts.mu2e.RMCPhaseSpace1NExternalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rmc_int_0n"] = DatasetInfo_t(  50000000, 1211523, 0.,   1., rate_rmc_ps_0n_80*rmc_int_br_, "rmci0b1s5r0102", "nts.mu2e.RMCPhaseSpace0NInternalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rmc_int_1n"] = DatasetInfo_t(  50000000,  507998, 0.,   1., rate_rmc_ps_1n_80*rmc_int_br_, "rmci1b1s5r0102", "nts.mu2e.RMCPhaseSpace1NInternalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rpc_ext"]    = DatasetInfo_t(5000000000,  477976, 0.,   1., rate_phys_rpc                , "rpce1b1s5r0102", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["rpc_int"]    = DatasetInfo_t( 125000000, 1910423, 0.,   1., rate_phys_rpc_int            , "rpci1b1s5r0102", "nts.mu2e.RPCExternalPhysicalMix1BB.MDC2025au_best_v1_1.root");
+      datasets_["pbar"]       = DatasetInfo_t(  30000000, 6306269, 0.,   1., rate_pbar                    , "pbar1b1s5r0102", "nts.mu2e.PbarResamplingMix1BB.MDC2025au_best_v1_1.root");
+    }
+
     // mumem keeps a single component per RMC source, taken from the 0 knockout sample
     // (mumep models the 0n and 1n components separately, see rmc_components)
     datasets_["rmc_ext"] = datasets_["rmc_ext_0n"];
     datasets_["rmc_int"] = datasets_["rmc_int_0n"];
-
-    // Reduced tracker:
-    datasets_["mumem"]      = DatasetInfo_t(1e7       , 4122379, 0.,   1., rate_sig                     , "cele1b1s5r0102", "nts.mu2e.CeMLeadingLogMix1BB.MDC2025bd_best_v2_0.root"  );
 
     datasets_["data_mds3c"] = DatasetInfo_t(1.    , 4921433, 0.,   1., 1., "mds3cb1s5r0100", "nts.mu2e.ensembleMDS3cMix1BB.MDC2025ar_best_v1_1.root"              );
     datasets_["data_mds3d"] = DatasetInfo_t(1.    , 9837962, 0.,   1., 1., "mds3db0s5r0100", "nts.mu2e.ensembleMDS3dOnSpill.MDC2025au_best_v1_1-001.root"         );
